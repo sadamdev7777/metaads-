@@ -239,7 +239,18 @@ function Budget() {
 
 /* ---------------- Integrations ---------------- */
 
-type Integ = { key: string; name: string; used_for: string; status: "connected" | "check" | "not_set_up"; detail: string };
+type MetaAccount = { id: string; name: string; active: boolean; currency: string };
+type Integ = {
+  key: string;
+  name: string;
+  used_for: string;
+  status: "connected" | "check" | "not_set_up";
+  detail: string;
+  secret_hint?: string | null;
+  updated_by_email?: string | null;
+  last_checked_at?: string | null;
+  config?: { accounts?: MetaAccount[]; selected?: string[] } | null;
+};
 const FALLBACK: Integ[] = [
   { key: "travelcrm", name: "TravelCRM", used_for: "Products, dates, seats and deposits.", status: "not_set_up", detail: "Waiting for the TravelCRM MCP to be installed. Phase 1." },
   { key: "meta_ads", name: "Meta Ads", used_for: "Campaigns, spend, and launching or changing ads.", status: "not_set_up", detail: "Not connected to this system yet. Phase 1 reads, Phase 2 writes." },
@@ -249,15 +260,21 @@ const FALLBACK: Integ[] = [
   { key: "mailgun", name: "Mailgun", used_for: "Email to leads that did not close.", status: "not_set_up", detail: "Planned for later, replaces Brevo." },
 ];
 
+const statusPill = (s: Integ["status"]) =>
+  s === "connected" ? <Pill tone="g">Connected</Pill> : s === "check" ? <Pill tone="a">Check</Pill> : <Pill>Not set up</Pill>;
+
 function Integrations() {
   const { act } = useStore();
   const [rows, setRows] = useState<Integ[]>(FALLBACK);
   const [db, setDb] = useState<{ ok: boolean; detail: string }>({ ok: false, detail: supabase ? "Checking…" : "Environment variables are not set in this build." });
 
-  async function testDb(log: boolean) {
+  async function load(log: boolean) {
     if (!supabase) return;
     const started = performance.now();
-    const { data, error } = await supabase.from("integration_status").select("key, name, used_for, status, detail").order("name");
+    const { data, error } = await supabase
+      .from("integration_status")
+      .select("key, name, used_for, status, detail, secret_hint, updated_by_email, last_checked_at, config")
+      .order("name");
     const ms = Math.round(performance.now() - started);
     if (error) setDb({ ok: false, detail: `Query failed: ${error.message}` });
     else {
@@ -268,12 +285,11 @@ function Integrations() {
   }
 
   useEffect(() => {
-    void testDb(false);
+    void load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const working = rows.filter((r) => r.status === "connected").length + (db.ok ? 1 : 0);
-  const pill = (s: Integ["status"]) => (s === "connected" ? <Pill tone="g">Connected</Pill> : s === "check" ? <Pill tone="a">Check</Pill> : <Pill>Not set up</Pill>);
 
   return (
     <>
@@ -282,8 +298,7 @@ function Integrations() {
           {working} of {rows.length + 1} connections are working
         </div>
         <div className="text-[13px] text-muted">
-          This is the real status, not sample data. The other connections are set up in later phases. If a required connection fails, Auto mode stops
-          and returns to Approval.
+          This is the real status, not sample data. If a required connection fails, Auto mode stops and returns to Approval.
         </div>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
@@ -291,24 +306,168 @@ function Integrations() {
           <div className="text-sm">Database, sign-in and activity log.</div>
           <div className="text-[13px] text-muted">{db.detail}</div>
           <div className="mt-auto flex justify-end">
-            <Btn kind="s" onClick={() => void testDb(true)} disabled={!supabase}>
+            <Btn kind="s" onClick={() => void load(true)} disabled={!supabase}>
               Test connection
             </Btn>
           </div>
         </Card>
-        {rows.map((r) => (
-          <Card key={r.key} title={r.name} right={pill(r.status)}>
-            <div className="text-sm">{r.used_for}</div>
-            <div className="text-[13px] text-muted">{r.detail}</div>
-            <div className="mt-auto flex justify-end">
-              <Btn kind="s" onClick={() => act(`Opened setup for ${r.name}`, "Settings, Integrations", `${r.name} is set up in a later phase.`)}>
-                {r.status === "not_set_up" ? "Set up" : "Test connection"}
-              </Btn>
-            </div>
-          </Card>
-        ))}
+        {rows.map((r) =>
+          r.key === "meta_ads" ? (
+            <MetaAdsCard key={r.key} row={r} reload={() => load(false)} />
+          ) : (
+            <Card key={r.key} title={r.name} right={statusPill(r.status)}>
+              <div className="text-sm">{r.used_for}</div>
+              <div className="text-[13px] text-muted">{r.detail}</div>
+              <div className="mt-auto flex justify-end">
+                <Btn kind="s" onClick={() => act(`Opened setup for ${r.name}`, "Settings, Integrations", `${r.name} is set up in a later phase.`)}>
+                  {r.status === "not_set_up" ? "Set up" : "Test connection"}
+                </Btn>
+              </div>
+            </Card>
+          ),
+        )}
       </div>
     </>
+  );
+}
+
+/** Meta Ads: the token is typed here once, checked against Meta, stored encrypted, and never shown again. */
+function MetaAdsCard({ row, reload }: { row: Integ; reload: () => Promise<void> }) {
+  const { act } = useStore();
+  const [token, setToken] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const accounts = row.config?.accounts ?? [];
+  const [picked, setPicked] = useState<string[]>(row.config?.selected ?? []);
+  const hasToken = Boolean(row.secret_hint);
+
+  useEffect(() => {
+    setPicked(row.config?.selected ?? []);
+  }, [row.config]);
+
+  async function call(action: string, extra: Record<string, unknown>, logText: string, okText: string) {
+    if (!supabase) {
+      setMsg({ ok: false, text: "Supabase is not connected in this build." });
+      return false;
+    }
+    setBusy(true);
+    setMsg(null);
+    const { data, error } = await supabase.functions.invoke("meta-connect", { body: { action, ...extra } });
+    setBusy(false);
+    const ok = !error && data?.ok === true;
+    const text = ok ? okText : data?.error || error?.message || "Something went wrong.";
+    setMsg({ ok, text });
+    act(`${logText}${ok ? "" : " (failed)"}`, "Settings, Integrations", text);
+    await reload();
+    return ok;
+  }
+
+  async function saveToken() {
+    const t = token.trim();
+    if (!t) return setMsg({ ok: false, text: "Paste the access token first." });
+    const ok = await call("save_token", { token: t }, `Saved a Meta access token ending ${t.slice(-4)}`, "Token checked with Meta and saved. Now choose the ad accounts.");
+    if (ok) {
+      setToken("");
+      setEditing(false);
+    }
+  }
+
+  const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "never");
+  const input = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+
+  return (
+    <Card title="Meta Ads" right={statusPill(row.status)} className="md:col-span-2">
+      <div className="text-sm">{row.used_for}</div>
+      <div className="text-[13px] text-muted">{row.detail}</div>
+
+      {hasToken && !editing ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-ground px-3 py-2.5 text-sm">
+          <div>
+            <B>Token saved</B>, ending in <span className="font-mono">••••{row.secret_hint}</span>. Saved by {row.updated_by_email || "unknown"}. Last checked{" "}
+            {when(row.last_checked_at)}.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Btn small kind="s" disabled={busy} onClick={() => void call("test", {}, "Tested the Meta Ads connection", "Meta accepted the stored token.")}>
+              Test connection
+            </Btn>
+            <Btn small kind="s" disabled={busy} onClick={() => setEditing(true)}>
+              Replace token
+            </Btn>
+            <Btn small kind="s" disabled={busy} onClick={() => void call("disconnect", {}, "Disconnected Meta Ads", "Disconnected. The token was removed.")}>
+              Disconnect
+            </Btn>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <ol className="m-0 list-decimal pl-5 text-[13px] text-muted">
+            <li>In Meta Business Settings, create a system user and assign it the ad account with View performance.</li>
+            <li>Generate a token for that system user with the ads_read permission.</li>
+            <li>Paste it here. It is checked with Meta, stored encrypted, and never shown again.</li>
+          </ol>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex min-w-[240px] flex-1 flex-col gap-1.5">
+              <label htmlFor="meta-token" className="text-[13px] font-semibold">
+                System user access token
+              </label>
+              <input id="meta-token" type="password" autoComplete="off" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} className={input} />
+            </div>
+            <Btn disabled={busy} onClick={() => void saveToken()}>
+              {busy ? "Checking with Meta…" : "Save and test"}
+            </Btn>
+            {editing && (
+              <Btn kind="s" disabled={busy} onClick={() => setEditing(false)}>
+                Cancel
+              </Btn>
+            )}
+          </div>
+        </div>
+      )}
+
+      {msg && (
+        <div role="status" className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${msg.ok ? "bg-[#E3F2E9] text-[#17663F]" : "bg-[#FBE6E3] text-[#A3231B]"}`}>
+          {msg.text}
+        </div>
+      )}
+
+      {hasToken && accounts.length > 0 && (
+        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend className="mb-1 text-[13px] font-semibold">Ad accounts to load into the system</legend>
+          {accounts.map((a) => (
+            <label key={a.id} className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-line px-3">
+              <input
+                type="checkbox"
+                className="h-[18px] w-[18px]"
+                checked={picked.includes(a.id)}
+                onChange={() => setPicked((p) => (p.includes(a.id) ? p.filter((x) => x !== a.id) : [...p, a.id]))}
+              />
+              <span className="flex-1 text-sm">
+                <B>{a.name}</B> <span className="font-mono text-[13px] text-muted">{a.id}</span>
+              </span>
+              <Pill tone={a.active ? "g" : "n"}>{a.active ? "Active" : "Not active"}</Pill>
+            </label>
+          ))}
+          <div>
+            <Btn
+              kind="s"
+              disabled={busy}
+              onClick={() =>
+                void call(
+                  "set_accounts",
+                  { account_ids: picked },
+                  `Selected ${picked.length} Meta ad account${picked.length === 1 ? "" : "s"}`,
+                  `${picked.length} ad account${picked.length === 1 ? "" : "s"} selected.`,
+                )
+              }
+            >
+              Save ad accounts
+            </Btn>
+          </div>
+        </fieldset>
+      )}
+      <p className="m-0 text-[13px] text-muted">Read only for now: the system cannot change anything in Meta until Phase 2.</p>
+    </Card>
   );
 }
 
