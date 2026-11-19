@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  color: #16201c;
+  background: #f6f7f5;
+}
+
+a {
+  color: #0f5c4d;
+}
+
+@keyframes mtbpulse {
+  0% { box-shadow: 0 0 0 0 rgba(30, 158, 90, 0.65); }
+  100% { box-shadow: 0 0 0 10px rgba(30, 158, 90, 0); }
+}
+@keyframes mtbtype {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+.dot-working { animation: mtbpulse 1.4s ease-out infinite; }
+.typing span { animation: mtbtype 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-working, .typing span { animation: none; }
+}
