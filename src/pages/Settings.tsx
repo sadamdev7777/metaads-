@@ -343,7 +343,7 @@ function DataHealth() {
 function Users() {
   const { act } = useStore();
   const { user, demo } = useAuth();
-  const [people, setPeople] = useState<{ email: string; name: string | null; created_at: string }[]>([]);
+  const [people, setPeople] = useState<{ email: string; name: string | null; created_at: string; is_superadmin?: boolean }[]>([]);
   const [log, setLog] = useState<ActivityRow[]>([]);
   const [source, setSource] = useState<"supabase" | "browser">("browser");
 
@@ -352,7 +352,7 @@ function Users() {
     setLog(a.rows);
     setSource(a.source);
     if (supabase) {
-      const { data } = await supabase.from("profiles").select("email, name, created_at").order("created_at");
+      const { data } = await supabase.from("profiles").select("email, name, created_at, is_superadmin").order("created_at");
       if (data) setPeople(data);
     }
   }
@@ -361,7 +361,7 @@ function Users() {
   }, []);
 
   const when = (iso: string) => new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  const list = people.length ? people : user ? [{ email: user.email, name: user.name, created_at: new Date().toISOString() }] : [];
+  const list: typeof people = people.length ? people : user ? [{ email: user.email, name: user.name, created_at: new Date().toISOString() }] : [];
 
   return (
     <>
@@ -383,7 +383,7 @@ function Users() {
       >
         <T
           heads={["Name", "Email", "Access", "Added"]}
-          rows={list.map((p) => [<B>{p.name || "(no name)"}</B>, <span className="break-all">{p.email}</span>, <Pill tone="g">Full access</Pill>, when(p.created_at)])}
+          rows={list.map((p) => [<B>{p.name || "(no name)"}</B>, <span className="break-all">{p.email}</span>, p.is_superadmin ? <Pill tone="t">Superadmin</Pill> : <Pill tone="g">Full access</Pill>, when(p.created_at)])}
         />
       </Card>
 
