@@ -876,13 +876,19 @@ Content-Type: application/json
   );
 }
 
+const AI_ROLES = [
+  { agent: "analyst", label: "Luqman, Night Analyst", why: "Suggested: claude-opus-5-5. One deep study a night, so the strongest thinking is worth it here." },
+  { agent: "ads", label: "Adam, Ads Manager", why: "Suggested: claude-haiku-5-5. Frequent, simple checks against the rules: small and fast is enough. Not running yet." },
+  { agent: "planner", label: "Mira, Campaign Planner", why: "Suggested: claude-sonnet-5-5. Writing copy and drafts needs quality without the top price. Not running yet." },
+];
+
 /** AI model: the Anthropic API key Luqman thinks with. Checked by listing models, which costs nothing. */
 function AiModelCard({ row, reload }: { row: Integ; reload: () => Promise<void> }) {
   const { act } = useStore();
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const cfg = (row.config ?? {}) as { model?: string; models?: string[] };
+  const cfg = (row.config ?? {}) as { model?: string; models?: string[]; agents?: Record<string, string> };
   const connected = Boolean(row.secret_hint);
 
   async function call(action: string, extra: Record<string, unknown>, logText: string, okText: string) {
@@ -902,17 +908,28 @@ function AiModelCard({ row, reload }: { row: Integ; reload: () => Promise<void> 
       <div className="text-[13px] text-muted">{row.detail}</div>
       {connected ? (
         <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg bg-ground px-3 py-2.5 text-sm">
-          <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
-            <label htmlFor="ai-model" className="text-[13px] font-semibold">
-              Model
-            </label>
-            <select id="ai-model" value={cfg.model ?? ""} disabled={busy} onChange={(e) => void call("set_model", { model: e.target.value }, `Changed the AI model to ${e.target.value}`, "Model changed.")} className={INPUT_CLS}>
-              {(cfg.models ?? []).map((m) => (
-                <option key={m}>{m}</option>
-              ))}
-            </select>
+          <div className="flex min-w-[260px] flex-1 flex-col gap-3">
+            {AI_ROLES.map((r) => (
+              <div key={r.agent} className="flex flex-col gap-1.5">
+                <label htmlFor={`ai-model-${r.agent}`} className="text-[13px] font-semibold">
+                  {r.label}
+                </label>
+                <select
+                  id={`ai-model-${r.agent}`}
+                  value={cfg.agents?.[r.agent] ?? cfg.model ?? ""}
+                  disabled={busy}
+                  onChange={(e) => void call("set_model", { agent: r.agent, model: e.target.value }, `Changed the model for ${r.label} to ${e.target.value}`, "Model changed.")}
+                  className={INPUT_CLS}
+                >
+                  {(cfg.models ?? []).map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
+                <div className="text-xs text-muted">{r.why}</div>
+              </div>
+            ))}
             <div className="text-xs text-muted">
-              Key ending <span className="font-mono">••••{row.secret_hint}</span>, saved by {row.updated_by_email || "unknown"}. A larger model thinks better and costs more per study.
+              One key for all three. Key ending <span className="font-mono">••••{row.secret_hint}</span>, saved by {row.updated_by_email || "unknown"}.
             </div>
           </div>
           <div className="flex flex-wrap gap-2">

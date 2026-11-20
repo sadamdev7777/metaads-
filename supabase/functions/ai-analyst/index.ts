@@ -89,7 +89,7 @@ Deno.serve(async (req: Request) => {
   const setStatus = (fields: Row) => admin.from("integration_status").update({ ...fields, last_checked_at: now }).eq("key", "ai_model");
   const config = async () => {
     const { data } = await admin.from("integration_status").select("config").eq("key", "ai_model").maybeSingle();
-    return (data?.config ?? {}) as { model?: string; models?: string[] };
+    return (data?.config ?? {}) as { model?: string; models?: string[]; agents?: Record<string, string> };
   };
   const headers = (key: string) => ({ "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" });
   // Listing models checks the key without spending anything.
@@ -99,8 +99,21 @@ Deno.serve(async (req: Request) => {
     if (!res.ok) return { ok: false as const, error: String(out?.error?.message ?? `Anthropic answered with status ${res.status}`) };
     return { ok: true as const, models: ((out.data ?? []) as Row[]).map((m) => String(m.id)) };
   };
-  const pickModel = (models: string[], wanted?: string) =>
-    (wanted && models.includes(wanted) ? wanted : null) ?? models.find((m) => m.includes("sonnet")) ?? models.find((m) => m.includes("opus")) ?? models[0] ?? "";
+  // Each AI staff member has a model suited to the job: the strongest for the nightly study, a small fast
+  // one for frequent rule checks, a balanced one for writing. Used unless someone picks another.
+  const PREFER: Record<string, string[]> = {
+    analyst: ["claude-opus-5-5", "opus", "sonnet"],
+    ads: ["claude-haiku-5-5", "haiku", "sonnet"],
+    planner: ["claude-sonnet-5-5", "sonnet", "opus"],
+  };
+  const pickModel = (models: string[], agent: string, wanted?: string) => {
+    if (wanted && models.includes(wanted)) return wanted;
+    for (const want of PREFER[agent] ?? []) {
+      const hit = models.find((m) => m === want) ?? models.find((m) => m.includes(want));
+      if (hit) return hit;
+    }
+    return models[0] ?? "";
+  };
 
   if (action === "disconnect") {
     await admin.rpc("set_integration_secret", { p_name: SECRET, p_secret: "-" });
@@ -123,15 +136,19 @@ Deno.serve(async (req: Request) => {
       if (error) return json({ ok: false, error: `Could not store the key: ${error.message}` });
     }
     const old = await config();
-    const model = pickModel(listed.models, action === "set_model" ? String(body.model ?? "") : old.model);
+    const target = action === "set_model" ? String(body.agent ?? "analyst") : "";
+    const agents: Record<string, string> = {};
+    for (const a of Object.keys(PREFER)) {
+      agents[a] = pickModel(listed.models, a, a === target ? String(body.model ?? "") : old.agents?.[a] ?? (a === "analyst" ? old.model : undefined));
+    }
     await setStatus({
       status: "connected",
-      detail: `Key accepted. Model: ${model}. Luqman studies the ads every night at 02:10 Malaysia time.`,
+      detail: `Key accepted. Luqman: ${agents.analyst}. Adam: ${agents.ads}. Mira: ${agents.planner}. Luqman studies the ads every night at 02:10 Malaysia time.`,
       secret_hint: key.slice(-4),
       ...(action === "save_key" ? { updated_by_email: who } : {}),
-      config: { model, models: listed.models },
+      config: { model: agents.analyst, models: listed.models, agents },
     });
-    return json({ ok: true, model, models: listed.models });
+    return json({ ok: true, model: agents.analyst, agents, models: listed.models });
   }
 
   if (action !== "run") return json({ ok: false, error: "Unknown action." }, 400);
@@ -140,7 +157,7 @@ Deno.serve(async (req: Request) => {
   const key = await secret(SECRET);
   if (!key) return json({ ok: false, error: "Connect the AI model in Settings, Integrations first." });
   const cfg = await config();
-  const model = cfg.model || pickModel(cfg.models ?? []);
+  const model = cfg.agents?.analyst || cfg.model || pickModel(cfg.models ?? [], "analyst");
   if (!model) return json({ ok: false, error: "No model chosen. Press Test connection in Settings, Integrations." });
 
   const [c30, c7, a30, a7, lessons, past, rules, dep] = await Promise.all([
