@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Avatar, B, Card, PageHead, Pill, Stat, T } from "../components/ui";
 import { STAFF } from "../lib/data";
+import { supabase } from "../lib/supabase";
 import { useEffect, useState } from "react";
 import { type Report, count, cpl, delivery, fetchLatestReport, paxLabel, paxTone, pendingCount, perPax, rm, rm2, useCampaigns, useCountryCost, useMonthTotals, when } from "../lib/live";
 
@@ -17,9 +18,11 @@ export default function Dashboard() {
   const failed = t?.last_sync && t.last_sync.ok === false;
   const [report, setReport] = useState<Report | null>(null);
   const [pending, setPending] = useState(0);
+  const [aiOn, setAiOn] = useState(false);
   useEffect(() => {
     void fetchLatestReport().then(setReport);
     void pendingCount().then(setPending);
+    if (supabase) void supabase.from("integration_status").select("status").eq("key", "ai_model").maybeSingle().then(({ data }) => setAiOn(data?.status === "connected"));
   }, []);
 
   return (
@@ -107,7 +110,7 @@ export default function Dashboard() {
       <Card title="AI staff" right={<Link to="/ai-office" className="text-[13px] font-semibold">Open AI Office</Link>}>
         <div className="grid gap-4 sm:grid-cols-2">
           {STAFF.map((s) => {
-            const on = s.who === "data" || s.who === "ads" || s.who === "plan" || (s.who === "ana" && Boolean(report));
+            const on = s.who === "data" || s.who === "ads" || s.who === "plan" || (s.who === "ana" && (aiOn || Boolean(report)));
             return (
               <div key={s.who} className="flex items-center gap-3">
                 <Avatar who={s.who} state={on ? "work" : "idle"} size={48} />
@@ -115,7 +118,7 @@ export default function Dashboard() {
                   <div className="text-sm font-bold">
                     {s.name} <span className="font-normal text-muted">· {s.role}</span>
                   </div>
-                  <div className="text-[13px] text-muted">{s.who === "data" ? `Last sync ${when(t?.last_good_sync)}` : s.who === "ana" && report ? `Last study ${when(report.created_at)}` : s.starts}</div>
+                  <div className="text-[13px] text-muted">{s.who === "data" ? `Last sync ${when(t?.last_good_sync)}` : s.who === "ana" && report ? `Last study ${when(report.created_at)}` : s.who === "ana" && aiOn ? "Connected. First study at 02:10 tonight" : s.starts}</div>
                 </div>
                 <Pill tone={on ? "g" : "n"}>{s.who === "ads" || s.who === "plan" ? "On call" : on ? "Running" : "Not started"}</Pill>
               </div>

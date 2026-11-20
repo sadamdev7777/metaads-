@@ -88,7 +88,7 @@ export default function AIOffice() {
                 {s.who === "data" ? (
                   <>Last sync {when(lastGood?.finished_at)}. Every hour, and in full at 01:37.</>
                 ) : s.who === "ana" && aiOn ? (
-                  <>Last study {when(report?.created_at)}. Every night at 02:10.</>
+                  <>{report ? `Last study ${when(report.created_at)}.` : "Connected. No study yet."} Every night at 02:10.</>
                 ) : (
                   s.starts
                 )}
