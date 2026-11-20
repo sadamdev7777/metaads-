@@ -75,7 +75,11 @@ Deno.serve(async (req: Request) => {
 
   switch (body.action) {
     case "save_token": {
-      const token = String(body.token ?? "").trim();
+      // A copy button can put extra text around the token (labels, several copies of it).
+      // If the pasted text holds exactly one token, use that.
+      const raw = String(body.token ?? "").trim();
+      const found = [...new Set(raw.match(/EAA[A-Za-z0-9]{50,}/g) ?? [])];
+      const token = found.length === 1 ? found[0] : raw;
       if (token.length < 20) return json({ ok: false, error: "That does not look like an access token." });
       const result = await listAccounts(token);
       if (!result.ok) return json({ ok: false, error: `Meta rejected the token: ${result.error}` });
