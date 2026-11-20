@@ -8,6 +8,8 @@ export const STAFF: Staff[] = [
   { who: "ana", name: "Luqman", role: "Night Analyst", kind: "AI", job: "Studies every ad at night, checks what came of his earlier advice, writes lessons in his notebook and proposes changes for the morning.", starts: "Starts when an AI model is connected" },
   { who: "ads", name: "Adam", role: "Ads Manager", kind: "AI", job: "Makes a change in Meta when a person approves it: pauses an ad, ad set or campaign, or changes a daily budget. Never acts by himself.", starts: "On call: acts only when you approve" },
   { who: "plan", name: "Mira", role: "Campaign Planner", kind: "AI", job: "Drafts a new campaign when asked: picks the best campaign to copy, suggests a budget and writes the ad text. Creates it in Meta paused, only when you confirm.", starts: "On call: drafts when you ask" },
+  { who: "bud", name: "Bakri", role: "Budget Planner", kind: "AI", job: "Every morning he weighs cost per pax, seats left and the month's budget, and proposes how to split the day's money between destinations.", starts: "Starts when an AI model is connected" },
+  { who: "cre", name: "Anis", role: "Creative Analyst", kind: "AI", job: "Twice a week she reads the text and looks at the picture of the top-spending ads, says which hooks work and why, and writes briefs for new creatives.", starts: "Starts when an AI model is connected" },
 ];
 
 export const MODE_ROWS: { action: string; who: AgentKey; name: string; limit: string }[] = [

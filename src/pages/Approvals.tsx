@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Avatar, B, Btn, Card, PageHead, Pill, T } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { type AdsAction, type Proposal, adam, confTone, decideProposal, fetchAdsActions, fetchProposals, proposalKind, when } from "../lib/live";
+import { type AdsAction, type Proposal, adam, confTone, decideProposal, fetchAdsActions, fetchProposals, proposalKind, when, agentOf } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] w-[140px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -68,16 +68,17 @@ export default function Approvals() {
 
   return (
     <>
-      <PageHead title="Approvals" sub={loading ? "Loading…" : pending.length ? `${pending.length} proposal${pending.length === 1 ? "" : "s"} from Luqman's night study.` : "Nothing pending."} />
+      <PageHead title="Approvals" sub={loading ? "Loading…" : pending.length ? `${pending.length} proposal${pending.length === 1 ? "" : "s"} from the AI staff.` : "Nothing pending."} />
 
       <div className="rounded-xl bg-[#E6F1EE] px-5 py-4 text-sm">
         <B>Nothing changes in Meta until you say so.</B> For a pause or a budget change, Adam can make the change in Meta the moment you confirm. For
-        anything else, approving only records your decision. Luqman checks the result the next night and learns from it.
+        anything else, approving only records your decision. Luqman checks the result the next night and learns from it. Bakri's are budget
+        moves, Anis's are new creatives to make.
       </div>
 
       {!loading && pending.length === 0 && (
         <Card title="No proposals waiting">
-          <div className="text-sm">Luqman studies the ads every night at 02:10 and leaves his proposals here for the morning.</div>
+          <div className="text-sm">Luqman studies the ads every night at 02:10, Bakri plans the budget at 06:30, and Anis reviews creatives on Monday and Thursday. Their proposals wait here.</div>
         </Card>
       )}
 
@@ -90,8 +91,8 @@ export default function Approvals() {
               <div className="flex items-center justify-between gap-2">
                 <Pill tone="a">{p.action_type}</Pill>
                 <div className="flex items-center gap-2 text-[13px] text-muted">
-                  <Avatar who="ana" state="wait" size={28} />
-                  Luqman, {when(p.created_at)}
+                  <Avatar who={agentOf(p.agent).who} state="wait" size={28} />
+                  {agentOf(p.agent).name}, {when(p.created_at)}
                 </div>
               </div>
               <div className="text-base font-bold">{p.target}</div>
@@ -103,7 +104,7 @@ export default function Approvals() {
               )}
               {p.cause && (
                 <div className="text-sm">
-                  <B>Luqman's view:</B> {p.cause}
+                  <B>{agentOf(p.agent).name}'s view:</B> {p.cause}
                 </div>
               )}
               {p.how && (

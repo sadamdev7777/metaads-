@@ -214,8 +214,8 @@ export default function Dashboard() {
         <Card className="lg:col-span-2" title="AI staff" right={<Link to="/ai-office" className={cardLink}>Open AI Office</Link>}>
           <ul className="m-0 flex list-none flex-col divide-y divide-line p-0">
             {STAFF.map((s) => {
-              const on = s.who === "data" || s.who === "ads" || s.who === "plan" || (s.who === "ana" && (aiOn || Boolean(report)));
-              const note = s.who === "data" ? `Last sync ${when(t?.last_good_sync)}` : s.who === "ana" && report ? `Last study ${when(report.created_at)}` : s.who === "ana" && aiOn ? "First study at 02:10 tonight" : s.starts;
+              const on = s.who === "data" || s.who === "ads" || s.who === "plan" || aiOn || (s.who === "ana" && Boolean(report));
+              const note = s.who === "data" ? `Last sync ${when(t?.last_good_sync)}` : s.who === "ana" && report ? `Last study ${when(report.created_at)}` : s.who === "ana" && aiOn ? "First study at 02:10 tonight" : s.who === "bud" && aiOn ? "Plans the budget every morning at 06:30" : s.who === "cre" && aiOn ? "Reviews creatives Monday and Thursday" : s.starts;
               return (
                 <li key={s.who} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                   <Avatar who={s.who} state={on ? "work" : "idle"} size={40} />

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Avatar, B, Btn, Card, PageHead, Pill, T } from "../components/ui";
 import { useAuth } from "../lib/auth";
 import { STAFF } from "../lib/data";
-import { type Lesson, type Report, analyst, confTone, fetchLatestReport, fetchLessons, removeLesson, when } from "../lib/live";
+import { type Lesson, type Report, analyst, confTone, fetchLatestReport, fetchLessons, removeLesson, when, runAgent } from "../lib/live";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 
@@ -18,6 +18,18 @@ export default function AIOffice() {
   const [aiOn, setAiOn] = useState(false);
   const [aiNote, setAiNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [plan, setPlan] = useState<Report | null>(null);
+  const [review, setReview] = useState<Report | null>(null);
+  const [working, setWorking] = useState("");
+  async function ask(fn: "budget-planner" | "creative-analyst", name: string, what: string) {
+    setWorking(fn);
+    act(`Asked ${name} for ${what} now`, "AI Office", `${name} is working. This takes about a minute.`);
+    const r = await runAgent(fn);
+    setWorking("");
+    act(r.ok ? `${name} finished ${what}` : `${name} could not finish ${what}`, "AI Office", r.ok ? "Done. Proposals are in Approvals." : r.error ?? "Failed.");
+    await load();
+    window.dispatchEvent(new Event("mtb:proposals"));
+  }
 
   async function load() {
     if (!supabase) return;
@@ -28,6 +40,8 @@ export default function AIOffice() {
       supabase.from("integration_status").select("status, secret_hint, detail").eq("key", "ai_model").maybeSingle(),
     ]);
     setRuns((r.data ?? []) as Run[]);
+    void fetchLatestReport("budget").then(setPlan);
+    void fetchLatestReport("creative").then(setReview);
     setReport(rep);
     setLessons(les);
     setAiOn(Boolean(ai.data?.secret_hint));
@@ -55,7 +69,7 @@ export default function AIOffice() {
     <>
       <PageHead
         title="AI Office"
-        sub="Dara keeps the data. Luqman studies the ads at night and learns. Adam changes Meta only when you approve. Mira drafts campaigns when you ask."
+        sub="Dara keeps the data. Luqman studies the ads at night. Bakri plans the budget each morning. Anis reviews the creatives. Adam changes Meta only when you approve. Mira drafts campaigns when you ask."
         right={
           aiOn ? (
             <Btn disabled={busy} onClick={() => void study()}>
@@ -71,9 +85,9 @@ export default function AIOffice() {
 
       {aiNote && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]"><B>Luqman's last study did not finish.</B> {aiNote} Press Study the ads now to try again.</div>}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {STAFF.map((s) => {
-          const on = s.who === "data" || s.who === "ads" || s.who === "plan" || (s.who === "ana" && aiOn);
+          const on = s.who === "data" || s.who === "ads" || s.who === "plan" || aiOn;
           return (
             <Card key={s.who}>
               <div className="flex items-center gap-3.5">
@@ -93,6 +107,10 @@ export default function AIOffice() {
                   <>Last sync {when(lastGood?.finished_at)}. Every hour, and in full at 01:37.</>
                 ) : s.who === "ana" && aiOn ? (
                   <>{report ? `Last study ${when(report.created_at)}.` : "Connected. No study yet."} Every night at 02:10.</>
+                ) : s.who === "bud" && aiOn ? (
+                  <>{plan ? `Last plan ${when(plan.created_at)}.` : "No plan yet."} Every morning at 06:30.</>
+                ) : s.who === "cre" && aiOn ? (
+                  <>{review ? `Last review ${when(review.created_at)}.` : "No review yet."} Monday and Thursday at 03:00.</>
                 ) : (
                   s.starts
                 )}
@@ -101,6 +119,47 @@ export default function AIOffice() {
           );
         })}
       </div>
+
+      {(
+        [
+          { key: "budget-planner", name: "Bakri", title: "Bakri's budget plan", rep: plan, what: "a budget plan", button: "Plan the budget now", empty: "No plan yet. Bakri plans the budget every morning at 06:30." },
+          { key: "creative-analyst", name: "Anis", title: "Anis's creative review", rep: review, what: "a creative review", button: "Review the creatives now", empty: "No review yet. Anis reviews the top-spending ads on Monday and Thursday. She sees each ad's text and one picture; for a video that is a still frame." },
+        ] as const
+      ).map((a) => (
+        <Card
+          key={a.key}
+          title={a.title}
+          right={
+            <span className="flex flex-wrap items-center gap-2.5">
+              {a.rep && <span className="text-[13px] text-muted">{when(a.rep.created_at)}</span>}
+              {aiOn && (
+                <Btn small kind="s" disabled={working !== ""} onClick={() => void ask(a.key, a.name, a.what)}>
+                  {working === a.key ? `${a.name} is working…` : a.button}
+                </Btn>
+              )}
+            </span>
+          }
+        >
+          {a.rep ? (
+            <>
+              <div className="text-[15px] leading-relaxed">{a.rep.summary}</div>
+              {a.rep.findings?.length > 0 && (
+                <div className="grid gap-2.5 md:grid-cols-2">
+                  {a.rep.findings.map((f, i) => (
+                    <div key={i} className="rounded-lg bg-ground px-3 py-2.5 text-sm">
+                      <B>{f.title}</B>
+                      <div className="whitespace-pre-line">{f.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="text-[12px] text-muted">Written by an AI model from Meta and TravelCRM figures. Check the numbers before acting. Proposals are in Approvals.</div>
+            </>
+          ) : (
+            <div className="text-sm text-muted">{a.empty}</div>
+          )}
+        </Card>
+      ))}
 
       <Card
         title="Luqman's night report"

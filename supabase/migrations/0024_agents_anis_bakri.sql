@@ -1,0 +1,2 @@
+-- run_agent(fn) starts ai-analyst, budget-planner or creative-analyst. Schedules (Malaysia time): Bakri daily 06:30,
+-- Anis Monday and Thursday 03:00. history_feed names the agent. Applied on 2026-11-21 as "agents_anis_bakri".

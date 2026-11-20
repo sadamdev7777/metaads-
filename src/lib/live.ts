@@ -147,6 +147,7 @@ export type Proposal = {
   apply_note: string | null;
   how: string | null;
   cause: string | null;
+  agent?: string | null;
 };
 export type AdsAction = { id: number; proposal_id: string | null; kind: string; ok: boolean; undone_at: string | null };
 export type ApplyResult = { ok: boolean; error?: string; note?: string; manual?: boolean; need_budget?: boolean; current?: number; max?: number; name?: string; level?: string };
@@ -170,9 +171,9 @@ export async function fetchAdsActions(): Promise<AdsAction[]> {
   return (data ?? []) as AdsAction[];
 }
 
-export async function fetchLatestReport(): Promise<Report | null> {
+export async function fetchLatestReport(agent: "analyst" | "budget" | "creative" = "analyst"): Promise<Report | null> {
   if (!supabase) return null;
-  const { data } = await supabase.from("ai_reports").select("*").order("id", { ascending: false }).limit(1).maybeSingle();
+  const { data } = await supabase.from("ai_reports").select("*").eq("agent", agent).order("id", { ascending: false }).limit(1).maybeSingle();
   return (data as Report) ?? null;
 }
 export async function fetchLessons(): Promise<Lesson[]> {
@@ -341,7 +342,7 @@ export async function fetchTreeIn(campaignId: string, p: Period): Promise<AdSetR
 }
 export async function fetchPendingProposals(): Promise<Proposal[]> {
   if (!supabase) return [];
-  const { data } = await supabase.from("proposals").select("*").eq("is_sample", false).eq("status", "pending").order("created_at", { ascending: true }).limit(12);
+  const { data } = await supabase.from("proposals").select("*").eq("is_sample", false).eq("status", "pending").eq("agent", "analyst").order("created_at", { ascending: true }).limit(12);
   return (data ?? []) as Proposal[];
 }
 
@@ -369,4 +370,19 @@ export function spanText(p: { from: string; to: string }) {
   const f = (d: string, withMonth = true) => new Date(`${d}T12:00:00+08:00`).toLocaleDateString("en-MY", withMonth ? { day: "numeric", month: "short", timeZone: "Asia/Kuala_Lumpur" } : { day: "numeric", timeZone: "Asia/Kuala_Lumpur" });
   if (p.from === p.to) return f(p.from);
   return `${f(p.from, p.from.slice(0, 7) !== p.to.slice(0, 7))} to ${f(p.to)}`;
+}
+
+/** Who made a proposal or a report, by the name staff know them by. */
+export const AGENT: Record<string, { name: string; who: "ana" | "bud" | "cre" }> = {
+  analyst: { name: "Luqman", who: "ana" },
+  budget: { name: "Bakri", who: "bud" },
+  creative: { name: "Anis", who: "cre" },
+};
+export const agentOf = (key?: string | null) => AGENT[key ?? "analyst"] ?? AGENT.analyst;
+/** Ask Bakri or Anis to do their work now. Takes about a minute. */
+export async function runAgent(fn: "budget-planner" | "creative-analyst"): Promise<{ ok: boolean; error?: string; [k: string]: unknown }> {
+  if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
+  const { data, error } = await supabase.functions.invoke(fn, { body: { action: "run" } });
+  if (error || !data?.ok) return { ok: false, error: (data?.error as string) || error?.message || "Something went wrong." };
+  return data;
 }
