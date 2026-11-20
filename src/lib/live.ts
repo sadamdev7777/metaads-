@@ -312,7 +312,7 @@ export async function fetchDepartures(): Promise<{ departures: Departure[]; pax:
   if (!supabase) return { departures: [], pax: new Map() };
   const [d, b] = await Promise.all([
     supabase.from("crm_departures").select("*").not("package_name", "is", null).order("departure_date").limit(1000),
-    supabase.from("crm_bookings").select("departure_id, pax, status").in("status", ["paid_deposit", "full_payment"]).limit(1000),
+    supabase.from("crm_bookings").select("departure_id, pax, status").eq("status", "paid_deposit").limit(1000),
   ]);
   const pax = new Map<number, number>();
   for (const r of (b.data ?? []) as { departure_id: number | null; pax: number }[]) if (r.departure_id) pax.set(r.departure_id, (pax.get(r.departure_id) ?? 0) + r.pax);

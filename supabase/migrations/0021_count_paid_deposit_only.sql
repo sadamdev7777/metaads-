@@ -1,0 +1,2 @@
+-- country_cost, destination_cost, destination_cost_range and unknown_departures now count only bookings
+-- with status paid_deposit (full_payment left out for now). Applied on 2026-11-21 as "count_paid_deposit_only".
