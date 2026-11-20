@@ -57,7 +57,7 @@ export default function AIOffice() {
           rows={runs.map((r) => [
             when(r.started_at),
             r.triggered_by === "schedule" ? "Hourly schedule" : r.triggered_by ?? "",
-            r.ok === null ? <Pill tone="a">Running</Pill> : r.ok ? <Pill tone="g">Done</Pill> : <Pill tone="r">Failed</Pill>,
+            r.ok === null ? Date.now() - new Date(r.started_at).getTime() > 300000 ? <Pill>Stopped early</Pill> : <Pill tone="a">Running</Pill> : r.ok ? <Pill tone="g">Done</Pill> : <Pill tone="r">Failed</Pill>,
             r.ok === false ? (
               r.error
             ) : r.summary?.campaigns ? (

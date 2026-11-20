@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { B, Btn, Card, PageHead, Pill, RunBy } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { COUNTRIES, type CampaignRow, count, cpl, delivery, guessCountry, rm, saveTag, syncNow, useCampaigns, useMonthTotals, when } from "../lib/live";
+import { COUNTRIES, type CampaignRow, count, cpl, delivery, guessCountry, guessRunBy, rm, saveTag, syncNow, useCampaigns, useMonthTotals, when } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -199,7 +199,7 @@ export default function Campaigns() {
                           </Btn>
                         </span>
                       ) : (
-                        <Btn small kind={c.country ? "s" : "p"} onClick={() => setEdit({ id: c.id, country: c.country ?? guess ?? "", runBy: c.run_by ?? "" })}>
+                        <Btn small kind={c.country ? "s" : "p"} onClick={() => setEdit({ id: c.id, country: c.country ?? guess ?? "", runBy: c.run_by ?? guessRunBy(c.name) ?? "" })}>
                           {c.country ? "Edit tag" : "Tag"}
                         </Btn>
                       )}

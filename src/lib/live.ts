@@ -41,6 +41,12 @@ export function guessCountry(name: string): string | null {
   return null;
 }
 
+/** Staff name suggested from a campaign name that ends in " - Name". A suggestion only. */
+export function guessRunBy(name: string): string | null {
+  const m = name.match(/\s-\s([A-Za-z][A-Za-z .']{1,24})\s*$/);
+  return m ? m[1].trim() : null;
+}
+
 export const rm = (n: number) => `RM${Math.round(n).toLocaleString("en-MY")}`;
 export const rm2 = (n: number) => `RM${n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const cpl = (spend: number, leads: number) => (leads > 0 ? rm2(spend / leads) : "");
