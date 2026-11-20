@@ -108,7 +108,7 @@ export async function saveTag(id: string, country: string | null, runBy: string 
 
 export async function syncNow() {
   if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
-  const { data, error } = await supabase.functions.invoke("meta-sync", { body: { days: 3 } });
+  const { data, error } = await supabase.functions.invoke("meta-sync", { body: { days: 2, structure: "active" } });
   if (error || !data?.ok) return { ok: false, error: (data?.error as string) || error?.message || "Sync failed." };
   return { ok: true, error: null, data };
 }

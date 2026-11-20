@@ -90,7 +90,11 @@ Deno.serve(async (req: Request) => {
   const days = Math.min(Math.max(Number(body.days) || 3, 1), 90);
   // skip_days moves the window back in time, so a long history can be loaded in several short runs.
   const skipDays = Math.min(Math.max(Number(body.skip_days) || 0, 0), 365);
-  const structure = body.structure !== false;
+  // structure: "all" reads every campaign, ad set and ad (once a day), "active" only the ones delivering
+  // now (every hour, far fewer calls to Meta), false reads spend only.
+  const scope = body.structure === false ? "none" : body.structure === "active" ? "active" : "all";
+  const structure = scope !== "none";
+  const only = scope === "active" ? `&filtering=${encodeURIComponent(JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]))}` : "";
 
   const { data: integ } = await admin.from("integration_status").select("config").eq("key", "meta_ads").maybeSingle();
   const selected = ((integ?.config as { selected?: string[] } | null)?.selected ?? []) as string[];
@@ -106,14 +110,14 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString();
     // Dates are Malaysia days, the ad account's time zone.
     const dayOf = (back: number) => new Date(Date.now() + 8 * 3600000 - back * 86400000).toISOString().slice(0, 10);
-    const totals = { campaigns: 0, ad_sets: 0, ads: 0, spend_rows: 0, new_campaigns: 0, days, skip_days: skipDays };
+    const totals = { campaigns: 0, ad_sets: 0, ads: 0, spend_rows: 0, new_campaigns: 0, days, skip_days: skipDays, scope };
 
     for (const account of selected) {
       const act = `act_${account}`;
       const [mc, ms, ma] = !structure ? [[], [], []] as Row[][] : await Promise.all([
-        getAll(`${GRAPH}/${act}/campaigns?fields=id,name,objective,effective_status,daily_budget,created_time&limit=500`, token),
-        getAll(`${GRAPH}/${act}/adsets?fields=id,name,campaign_id,effective_status,daily_budget&limit=500`, token),
-        getAll(`${GRAPH}/${act}/ads?fields=id,name,adset_id,effective_status&limit=500`, token),
+        getAll(`${GRAPH}/${act}/campaigns?fields=id,name,objective,effective_status,daily_budget,created_time&limit=500${only}`, token),
+        getAll(`${GRAPH}/${act}/adsets?fields=id,name,campaign_id,effective_status,daily_budget&limit=500${only}`, token),
+        getAll(`${GRAPH}/${act}/ads?fields=id,name,adset_id,effective_status&limit=500${only}`, token),
       ]);
 
       const before = await idMap(admin, "campaigns", "meta_campaign_id");
@@ -132,6 +136,22 @@ Deno.serve(async (req: Request) => {
         if (error) throw new Error(`campaigns: ${error.message}`);
       }
       const cMap = await idMap(admin, "campaigns", "meta_campaign_id");
+
+      // Hourly runs read active campaigns only, so one that was just paused would keep showing as
+      // active. Ask Meta for the status of those few directly.
+      if (scope === "active") {
+        const seen = new Set(mc.map((c) => String(c.id)));
+        const { data: wasActive } = await admin.from("campaigns").select("meta_campaign_id").eq("delivery_status", "ACTIVE").not("meta_campaign_id", "is", null).limit(1000);
+        const stale = (wasActive ?? []).map((r) => String(r.meta_campaign_id)).filter((id) => !seen.has(id));
+        for (const part of chunks(stale, 50)) {
+          const res = await fetch(`${GRAPH}/?ids=${part.join(",")}&fields=effective_status`, { headers: { Authorization: `Bearer ${token}` } });
+          const found = (await res.json().catch(() => ({}))) as Record<string, { effective_status?: string }>;
+          for (const id of part) {
+            const status = found?.[id]?.effective_status;
+            if (status) await admin.from("campaigns").update({ delivery_status: status, synced_at: now, updated_at: now }).eq("meta_campaign_id", id);
+          }
+        }
+      }
 
       for (const part of chunks(ms.filter((s) => cMap.has(String(s.campaign_id))), 500)) {
         const { error } = await admin.from("ad_sets").upsert(
@@ -191,7 +211,7 @@ Deno.serve(async (req: Request) => {
     }
     await admin.from("integration_status").update({
       status: "connected", last_checked_at: now,
-      ...(structure ? { detail: `Last sync ${now.slice(0, 16).replace("T", " ")} UTC: ${totals.campaigns} campaigns, ${totals.ad_sets} ad sets, ${totals.ads} ads. Read only until Phase 2.` } : {}),
+      ...(scope === "all" ? { detail: `Last sync ${now.slice(0, 16).replace("T", " ")} UTC: ${totals.campaigns} campaigns, ${totals.ad_sets} ad sets, ${totals.ads} ads. Read only until Phase 2.` } : {}),
     }).eq("key", "meta_ads");
     await finish(true, totals);
     return json({ ok: true, ...totals });
