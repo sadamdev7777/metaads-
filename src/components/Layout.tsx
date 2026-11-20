@@ -12,6 +12,7 @@ const NAV: { to: string; label: string; step?: string }[] = [
   { to: "/campaigns", label: "Campaigns", step: "3" },
   { to: "/analysis", label: "Analysis", step: "4" },
   { to: "/ai-office", label: "AI Office" },
+  { to: "/history", label: "History" },
   { to: "/settings", label: "Settings" },
 ];
 

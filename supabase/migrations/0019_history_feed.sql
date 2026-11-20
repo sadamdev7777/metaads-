@@ -1,0 +1,2 @@
+-- history_feed(p_from, p_to): one list of staff actions, AI work, Meta changes and daily sync counts,
+-- by Malaysia day. Applied to the project on 2026-11-21 as migration "history_feed" (full definition there).

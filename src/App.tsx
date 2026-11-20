@@ -11,6 +11,7 @@ import Campaigns from "./pages/Campaigns";
 import CampaignNew from "./pages/CampaignNew";
 import Analysis from "./pages/Analysis";
 import AIOffice from "./pages/AIOffice";
+import History from "./pages/History";
 import Settings from "./pages/Settings";
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/campaigns/new" element={<CampaignNew />} />
           <Route path="/analysis" element={<Analysis />} />
           <Route path="/ai-office" element={<AIOffice />} />
+          <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Navigate to="/settings/rules" replace />} />
           <Route path="/settings/:tab" element={<Settings />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

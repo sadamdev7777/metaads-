@@ -73,7 +73,7 @@ const STATUS: Record<string, { text: string; tone: "g" | "a" | "r" | "n" }> = {
 };
 export const delivery = (s?: string | null) => STATUS[s ?? ""] ?? { text: s ? s.toLowerCase().replace(/_/g, " ") : "Unknown", tone: "n" as const };
 
-function useRpc<T>(fn: string, args: Record<string, unknown>, empty: T) {
+export function useRpc<T>(fn: string, args: Record<string, unknown>, empty: T) {
   const [data, setData] = useState<T>(empty);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState<string | null>(supabase ? null : "Supabase is not connected in this build.");
