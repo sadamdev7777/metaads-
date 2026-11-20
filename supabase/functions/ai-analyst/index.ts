@@ -34,10 +34,10 @@ Rules for judgement:
 - Do not judge anything on thin data. Under about RM150 of spend or under about 5 leads is too little: say "not enough data" rather than guess.
 - Prefer comparisons inside one campaign over comparisons across countries, because prices and demand differ by destination.
 - Give numbers for every claim, taken from the data. Never invent a figure.
-- Always say WHY, in your own opinion. For every proposal fill \"cause\": your best reading of why this is expensive or cheap, worked out from the data. Work it out step by step: cost per 1,000 impressions (spend / impressions x 1000) tells you if the audience is expensive to reach; click rate (clicks / impressions) tells you if the creative makes people stop and click; clicks per lead (leads / clicks) tells you if the offer, price or form puts people off after they click. Compare each against the other ads in the same campaign, name which of the three is the weak one and give the two numbers side by side. Then add what you think is behind it (for example: tired creative, weak hook, wrong talent, audience too narrow, price or dates not attractive, too many ad sets sharing a small budget). Say plainly when it is your opinion and not proven (\"My guess is...\").
+- Always say WHY, in your own opinion. For every proposal fill "cause": your best reading of why this is expensive or cheap, worked out from the data. Work it out step by step: cost per 1,000 impressions (spend / impressions x 1000) tells you if the audience is expensive to reach; click rate (clicks / impressions) tells you if the creative makes people stop and click; clicks per lead (leads / clicks) tells you if the offer, price or form puts people off after they click. Compare each against the other ads in the same campaign, name which of the three is the weak one and give the two numbers side by side. Then add what you think is behind it (for example: tired creative, weak hook, wrong talent, audience too narrow, price or dates not attractive, too many ad sets sharing a small budget). Say plainly when it is your opinion and not proven ("My guess is...").
 - Write plain English that a busy marketing executive can act on. No jargon, no filler.
 
-Hand in your work by calling the submit_report tool once. Keep it tight so it is quick to read: at most 6 findings, at most 8 review items, at most 6 lessons, at most 8 proposals, and no field longer than about 60 words (\"cause\" may run to 80).`;
+Hand in your work by calling the submit_report tool once. Fill the fields in the order given: summary, then proposals, then the rest. Keep it tight so it is quick to read: at most 6 findings, at most 8 review items, at most 6 lessons, at most 8 proposals, and no field longer than about 60 words ("cause" may run to 80).`;
 
 const REPORT_TOOL = {
   name: "submit_report",
@@ -46,9 +46,6 @@ const REPORT_TOOL = {
     type: "object",
     properties: {
       summary: { type: "string", description: "3 to 5 sentences: the state of the ads and the most important thing to do tomorrow" },
-      findings: { type: "array", items: { type: "object", properties: { title: { type: "string" }, detail: { type: "string", description: "what the data shows, with numbers" } }, required: ["title", "detail"] } },
-      review: { type: "array", items: { type: "object", properties: { proposal: { type: "string" }, verdict: { type: "string", enum: ["right", "wrong", "too early"] }, detail: { type: "string" } }, required: ["proposal", "verdict", "detail"] } },
-      lessons: { type: "array", items: { type: "object", properties: { lesson: { type: "string" }, evidence: { type: "string" }, confidence: { type: "string", enum: ["low", "medium", "high"] } }, required: ["lesson", "evidence", "confidence"] } },
       proposals: {
         type: "array",
         items: {
@@ -68,8 +65,11 @@ const REPORT_TOOL = {
           required: ["action_type", "level", "target", "reason", "numbers", "cause", "how", "expected", "confidence"],
         },
       },
+      findings: { type: "array", items: { type: "object", properties: { title: { type: "string" }, detail: { type: "string", description: "what the data shows, with numbers" } }, required: ["title", "detail"] } },
+      review: { type: "array", items: { type: "object", properties: { proposal: { type: "string" }, verdict: { type: "string", enum: ["right", "wrong", "too early"] }, detail: { type: "string" } }, required: ["proposal", "verdict", "detail"] } },
+      lessons: { type: "array", items: { type: "object", properties: { lesson: { type: "string" }, evidence: { type: "string" }, confidence: { type: "string", enum: ["low", "medium", "high"] } }, required: ["lesson", "evidence", "confidence"] } },
     },
-    required: ["summary", "findings", "review", "lessons", "proposals"],
+    required: ["summary", "proposals", "findings", "review", "lessons"],
   },
 };
 
@@ -221,7 +221,7 @@ Deno.serve(async (req: Request) => {
     headers: headers(key),
     body: JSON.stringify({
       model,
-      max_tokens: 12000,
+      max_tokens: 24000,
       system: SYSTEM,
       tools: [REPORT_TOOL],
       tool_choice: { type: "auto" },
@@ -238,7 +238,7 @@ Deno.serve(async (req: Request) => {
   const blocks = (out.content ?? []) as Row[];
   const viaTool = blocks.find((b) => b.type === "tool_use" && b.name === "submit_report")?.input as Row | undefined;
   const parsed = viaTool ?? extractJson(blocks.filter((b) => b.type === "text").map((b) => String(b.text)).join(""));
-  if (!parsed || typeof parsed.summary !== "string") {
+  if (!parsed || typeof parsed.summary !== "string" || out.stop_reason === "max_tokens") {
     const why = out.stop_reason === "max_tokens" ? "The report was cut off before it finished (too long)." : `The report came back in a form the system could not read (stop reason: ${out.stop_reason ?? "unknown"}).`;
     await setStatus({ status: "check", detail: `Last study failed: ${why}` });
     return json({ ok: false, error: `${why} Nothing was saved.` });
