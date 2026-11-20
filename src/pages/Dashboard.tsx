@@ -3,12 +3,13 @@ import { Avatar, B, Card, PageHead, Pill, Stat, T } from "../components/ui";
 import { STAFF } from "../lib/data";
 import { supabase } from "../lib/supabase";
 import { useEffect, useState } from "react";
-import { type Report, count, cpl, delivery, fetchLatestReport, paxLabel, paxTone, pendingCount, perPax, rm, rm2, useCampaigns, useCountryCost, useMonthTotals, when } from "../lib/live";
+import { type Report, count, cpl, delivery, fetchLatestReport, paxLabel, paxTone, pendingCount, perPax, rm, rm2, useCampaigns, useCountryCost, useDepositTotals, useMonthTotals, when } from "../lib/live";
 
 const linkBtn = "flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-3.5 text-sm font-semibold text-ink no-underline";
 
 export default function Dashboard() {
   const { data: t, error } = useMonthTotals();
+  const { data: dep } = useDepositTotals();
   const week = useCampaigns(7);
   const cost = useCountryCost(30);
   const running = week.data.filter((c) => c.delivery_status === "ACTIVE" || c.spend > 0);
@@ -73,6 +74,28 @@ export default function Dashboard() {
         <Stat label="Cost per lead" value={t && t.leads > 0 ? rm2(t.spend / t.leads) : "…"} sub="this month" />
         <Stat label="Active campaigns" value={t ? count(t.active) : "…"} sub={t ? `of ${count(t.campaigns)} in the ad account` : ""} />
       </div>
+
+      <Card
+        title="Paid deposit"
+        right={<span className="text-[13px] text-muted">{dep?.last_synced ? `From TravelCRM, loaded ${when(dep.last_synced)}` : "From TravelCRM"}</span>}
+      >
+        <div className="flex flex-wrap gap-4">
+          {(
+            [
+              ["Today", dep?.today],
+              ["Yesterday", dep?.yesterday],
+              ["Last 7 days", dep?.week],
+              ["This month", dep?.month],
+            ] as const
+          ).map(([label, d]) => (
+            <Stat key={label} label={label} value={d ? `${count(d.pax)} pax` : "…"} sub={d ? `${count(d.bookings)} ${d.bookings === 1 ? "booking" : "bookings"}` : ""} />
+          ))}
+        </div>
+        <div className="text-[13px] text-muted">
+          Bookings with status paid deposit, by booking date. Cancelled and full payment are left out. Loaded once a night at 00:45, so today fills in
+          tomorrow.{dep?.first_date ? ` Records start ${dep.first_date}.` : ""}
+        </div>
+      </Card>
 
       <Card title="AI staff" right={<Link to="/ai-office" className="text-[13px] font-semibold">Open AI Office</Link>}>
         <div className="grid gap-4 sm:grid-cols-2">

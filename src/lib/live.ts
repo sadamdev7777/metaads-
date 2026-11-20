@@ -353,3 +353,8 @@ export async function setDepartureDestination(departureId: number, destinationId
   const { error } = await supabase.rpc("set_departure_destination", { p_departure: departureId, p_destination: destinationId });
   return error?.message ?? null;
 }
+
+/** Paid-deposit bookings from TravelCRM, by Malaysia day of booking. */
+type DepCount = { bookings: number; pax: number };
+export type DepositTotals = { today: DepCount; yesterday: DepCount; week: DepCount; month: DepCount; first_date: string | null; last_date: string | null; last_synced: string | null };
+export const useDepositTotals = () => useRpc<DepositTotals | null>("deposit_totals", {}, null);

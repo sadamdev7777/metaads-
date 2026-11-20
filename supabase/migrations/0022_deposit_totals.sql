@@ -1,0 +1,3 @@
+-- deposit_totals(): paid-deposit bookings and pax for today, yesterday, last 7 days and this month (Malaysia time).
+-- Also unknown_departures() now returns a likely destination from the nearest known departure number.
+-- Applied on 2026-11-21 as "deposit_totals" and "unknown_departures_suggest" (full definitions there).
