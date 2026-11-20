@@ -28,7 +28,7 @@ Rules:
 - Keep the copy halal-travel appropriate and honest: no false urgency, no promises about visas or weather.
 - Plain English for the analysis, Malay for the ad copy.
 
-Hand in your work by calling submit_review once: summary, then briefs, then ads, then patterns.`;
+Hand in your work by calling submit_review once: summary, then briefs, then ads, then patterns. Keep it short: no field over 45 words, except primary_text which may run to 90.`;
 
 const TOOL = {
   name: "submit_review",
@@ -152,12 +152,12 @@ Deno.serve(async (req: Request) => {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model, max_tokens: 16000, system: SYSTEM, tools: [TOOL], tool_choice: { type: "auto" }, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({ model, max_tokens: 32000, system: SYSTEM, tools: [TOOL], tool_choice: { type: "auto" }, messages: [{ role: "user", content }] }),
   });
   const out = await res.json().catch(() => ({}));
   if (!res.ok) return json({ ok: false, error: String(out?.error?.message ?? `Anthropic answered with status ${res.status}`) });
   const parsed = ((out.content ?? []) as Row[]).find((b) => b.type === "tool_use" && b.name === "submit_review")?.input as Row | undefined;
-  if (!parsed || typeof parsed.summary !== "string" || out.stop_reason === "max_tokens") return json({ ok: false, error: "The review did not come back complete. Nothing was saved." });
+  if (!parsed || typeof parsed.summary !== "string" || out.stop_reason === "max_tokens") return json({ ok: false, error: `The review did not come back complete (${out.stop_reason ?? "no reply"}). Nothing was saved.` });
 
   const list = (v: unknown) => (Array.isArray(v) ? (v as Row[]) : []);
   const str = (v: unknown, max = 2000) => (v == null ? null : String(v).slice(0, max));

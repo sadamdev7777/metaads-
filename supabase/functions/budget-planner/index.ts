@@ -28,7 +28,7 @@ Rules:
 - Every proposal must name a real campaign or ad set from the data, with its id when you have it, and say exactly what the new daily amount should be.
 - Give numbers for every claim. Never invent a figure. Plain English, no jargon.
 
-Hand in your work by calling submit_plan once: summary first, then proposals (most valuable first, at most 6), then the allocation table.`;
+Hand in your work by calling submit_plan once: summary first, then proposals (most valuable first, at most 6), then the allocation table. Keep it short: no field over 40 words, and at most 15 allocation rows (destinations with spend only).`;
 
 const TOOL = {
   name: "submit_plan",
@@ -142,14 +142,14 @@ Deno.serve(async (req: Request) => {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
-      model, max_tokens: 16000, system: SYSTEM, tools: [TOOL], tool_choice: { type: "auto" },
+      model, max_tokens: 32000, system: SYSTEM, tools: [TOOL], tool_choice: { type: "auto" },
       messages: [{ role: "user", content: `Here is this morning's data as JSON. Study it, then call submit_plan. Do not answer in plain text.\n\n${JSON.stringify(brief)}` }],
     }),
   });
   const out = await res.json().catch(() => ({}));
   if (!res.ok) return json({ ok: false, error: String(out?.error?.message ?? `Anthropic answered with status ${res.status}`) });
   const parsed = ((out.content ?? []) as Row[]).find((b) => b.type === "tool_use" && b.name === "submit_plan")?.input as Row | undefined;
-  if (!parsed || typeof parsed.summary !== "string" || out.stop_reason === "max_tokens") return json({ ok: false, error: "The plan did not come back complete. Nothing was saved." });
+  if (!parsed || typeof parsed.summary !== "string" || out.stop_reason === "max_tokens") return json({ ok: false, error: `The plan did not come back complete (${out.stop_reason ?? "no reply"}). Nothing was saved.` });
 
   const list = (v: unknown) => (Array.isArray(v) ? (v as Row[]) : []);
   const str = (v: unknown, max = 2000) => (v == null ? null : String(v).slice(0, max));
