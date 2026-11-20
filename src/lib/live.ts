@@ -244,3 +244,62 @@ export async function rematch() {
   const { data } = await supabase.rpc("apply_destinations");
   return data as { campaigns_changed: number; departures_changed: number } | null;
 }
+
+/* ---------- Phase 3: media library and campaign drafts ---------- */
+export type MediaItem = { id: string; file_name: string; file_path: string | null; placement: string | null; format: string | null; talent: string | null; note: string | null; destination_id: string | null; uploaded_by_email: string | null; size_bytes: number | null; created_at: string; url?: string };
+export async function fetchMedia(): Promise<MediaItem[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("media").select("*").eq("is_sample", false).order("created_at", { ascending: false }).limit(200);
+  const rows = (data ?? []) as MediaItem[];
+  const paths = rows.map((r) => r.file_path).filter(Boolean) as string[];
+  if (paths.length) {
+    const { data: signed } = await supabase.storage.from("media").createSignedUrls(paths, 3600);
+    const map = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
+    rows.forEach((r) => (r.url = r.file_path ? map.get(r.file_path) ?? undefined : undefined));
+  }
+  return rows;
+}
+export async function uploadMedia(file: File, meta: { destination_id: string | null; placement: string; talent: string; note: string }, email: string) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  const isVideo = file.type.startsWith("video/");
+  if (!isVideo && !file.type.startsWith("image/")) return "Only image and video files can be uploaded.";
+  const safe = file.name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80);
+  const path = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}-${safe}`;
+  const up = await supabase.storage.from("media").upload(path, file, { contentType: file.type, upsert: false });
+  if (up.error) return /exceeded|too large|maximum/i.test(up.error.message) ? "The file is larger than the storage limit (50 MB unless raised in Supabase)." : up.error.message;
+  const { error } = await supabase.from("media").insert({
+    file_name: file.name, file_path: path, placement: meta.placement, format: isVideo ? "MP4" : "PNG", destination_id: meta.destination_id,
+    talent: meta.talent.trim() || null, note: meta.note.trim() || null, uploaded_by_email: email, size_bytes: file.size, mime_type: file.type, is_sample: false,
+  });
+  return error?.message ?? null;
+}
+export async function removeMedia(m: MediaItem) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  if (m.file_path) await supabase.storage.from("media").remove([m.file_path]);
+  const { error } = await supabase.from("media").delete().eq("id", m.id);
+  return error?.message ?? null;
+}
+
+export type Draft = {
+  id: string; created_at: string; created_by_email: string | null; made_by: string; destination_id: string | null; source_campaign_id: string | null;
+  name: string; daily_budget: number | null; objective: string | null; audience: string | null; placements: string | null;
+  primary_texts: string[]; headlines: string[]; media_ids: string[]; reasoning: string | null; status: string; result_note: string | null; decided_by_email: string | null; model: string | null;
+};
+export async function fetchDrafts(): Promise<Draft[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("campaign_drafts").select("*").neq("status", "discarded").order("created_at", { ascending: false }).limit(40);
+  return (data ?? []) as Draft[];
+}
+export async function saveDraft(d: Partial<Draft> & { name: string }, email: string) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  const { error } = d.id
+    ? await supabase.from("campaign_drafts").update({ name: d.name, daily_budget: d.daily_budget ?? null, source_campaign_id: d.source_campaign_id ?? null, status: d.status ?? "draft" }).eq("id", d.id)
+    : await supabase.from("campaign_drafts").insert({ name: d.name, daily_budget: d.daily_budget ?? null, source_campaign_id: d.source_campaign_id ?? null, destination_id: d.destination_id ?? null, made_by: "person", created_by_email: email });
+  return error?.message ?? null;
+}
+export async function mira(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string; note?: string }> {
+  if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
+  const { data, error } = await supabase.functions.invoke("campaign-planner", { body });
+  if (error && !data) return { ok: false, error: error.message };
+  return (data ?? { ok: false, error: "No answer." }) as { ok: boolean; error?: string; note?: string };
+}
