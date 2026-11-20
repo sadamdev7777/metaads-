@@ -87,7 +87,7 @@ export default function Campaigns() {
     <>
       <PageHead
         title="Campaigns"
-        sub={`Step 3. Live from Meta Ads. Last sync ${when(last)}. The system reads only: nothing here changes an ad.`}
+        sub={`Step 3. Live from Meta Ads. Last sync ${when(last)}. Nothing changes in Meta without an approval.`}
         right={
           <div className="flex items-center gap-2">
             <Btn kind="s" disabled={busy} onClick={() => void sync()}>

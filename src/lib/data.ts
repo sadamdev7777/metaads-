@@ -6,7 +6,7 @@ export type Staff = { who: AgentKey; name: string; role: string; kind: "Automati
 export const STAFF: Staff[] = [
   { who: "data", name: "Dara", role: "Data Keeper", kind: "Automation", job: "Pulls campaigns, ads and spend from Meta every hour. Later: products and deposits from TravelCRM, and form leads.", starts: "Running" },
   { who: "ana", name: "Luqman", role: "Night Analyst", kind: "AI", job: "Studies every ad at night, checks what came of his earlier advice, writes lessons in his notebook and proposes changes for the morning.", starts: "Starts when an AI model is connected" },
-  { who: "ads", name: "Adam", role: "Ads Manager", kind: "AI", job: "Carries out approved changes in Meta and applies the RM50 and RM80 rules to running ads.", starts: "Starts in Phase 2, needs TravelCRM deposits" },
+  { who: "ads", name: "Adam", role: "Ads Manager", kind: "AI", job: "Makes a change in Meta when a person approves it: pauses an ad, ad set or campaign, or changes a daily budget. Never acts by himself.", starts: "On call: acts only when you approve" },
   { who: "plan", name: "Mira", role: "Campaign Planner", kind: "AI", job: "Drafts new campaigns from Luqman's lessons: objective, budget, audience and copy.", starts: "Starts in Phase 3" },
 ];
 

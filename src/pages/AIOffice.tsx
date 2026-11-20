@@ -53,7 +53,7 @@ export default function AIOffice() {
     <>
       <PageHead
         title="AI Office"
-        sub="Dara keeps the data. Luqman studies the ads at night and learns. Adam and Mira start in later phases."
+        sub="Dara keeps the data. Luqman studies the ads at night and learns. Adam changes Meta only when you approve. Mira starts in Phase 3."
         right={
           aiOn ? (
             <Btn disabled={busy} onClick={() => void study()}>
@@ -69,7 +69,7 @@ export default function AIOffice() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {STAFF.map((s) => {
-          const on = s.who === "data" || (s.who === "ana" && aiOn);
+          const on = s.who === "data" || s.who === "ads" || (s.who === "ana" && aiOn);
           return (
             <Card key={s.who}>
               <div className="flex items-center gap-3.5">
@@ -78,7 +78,7 @@ export default function AIOffice() {
                   <h2 className="m-0 text-lg font-bold">{s.name}</h2>
                   <div className="text-[13px] text-muted">{s.role}</div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
-                    <Pill tone={on ? "g" : "n"}>{on ? "Running" : "Not started"}</Pill>
+                    <Pill tone={on ? "g" : "n"}>{s.who === "ads" ? "On call" : on ? "Running" : "Not started"}</Pill>
                     <Pill>{s.kind}</Pill>
                   </div>
                 </div>

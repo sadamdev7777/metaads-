@@ -144,7 +144,29 @@ export type Proposal = {
   status: string;
   decided_by_email: string | null;
   decided_at: string | null;
+  apply_note: string | null;
 };
+export type AdsAction = { id: number; proposal_id: string | null; kind: string; ok: boolean; undone_at: string | null };
+export type ApplyResult = { ok: boolean; error?: string; note?: string; manual?: boolean; need_budget?: boolean; current?: number; max?: number; name?: string; level?: string };
+
+/** What kind of change a proposal is, so the page knows whether Adam can make it in Meta. */
+export function proposalKind(actionType: string): "pause" | "budget" | "manual" {
+  const t = actionType.toLowerCase();
+  if (/turn off|pause|stop/.test(t)) return "pause";
+  if (/raise|lower|increase|decrease|reduce/.test(t) && !/move/.test(t)) return "budget";
+  return "manual";
+}
+export async function adam(body: Record<string, unknown>): Promise<ApplyResult> {
+  if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
+  const { data, error } = await supabase.functions.invoke("ads-action", { body });
+  if (error && !data) return { ok: false, error: error.message };
+  return (data ?? { ok: false, error: "No answer." }) as ApplyResult;
+}
+export async function fetchAdsActions(): Promise<AdsAction[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("ads_actions").select("id, proposal_id, kind, ok, undone_at").eq("ok", true).order("id", { ascending: false }).limit(100);
+  return (data ?? []) as AdsAction[];
+}
 
 export async function fetchLatestReport(): Promise<Report | null> {
   if (!supabase) return null;

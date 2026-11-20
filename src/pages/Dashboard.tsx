@@ -107,7 +107,7 @@ export default function Dashboard() {
       <Card title="AI staff" right={<Link to="/ai-office" className="text-[13px] font-semibold">Open AI Office</Link>}>
         <div className="grid gap-4 sm:grid-cols-2">
           {STAFF.map((s) => {
-            const on = s.who === "data" || (s.who === "ana" && Boolean(report));
+            const on = s.who === "data" || s.who === "ads" || (s.who === "ana" && Boolean(report));
             return (
               <div key={s.who} className="flex items-center gap-3">
                 <Avatar who={s.who} state={on ? "work" : "idle"} size={48} />
@@ -117,7 +117,7 @@ export default function Dashboard() {
                   </div>
                   <div className="text-[13px] text-muted">{s.who === "data" ? `Last sync ${when(t?.last_good_sync)}` : s.who === "ana" && report ? `Last study ${when(report.created_at)}` : s.starts}</div>
                 </div>
-                <Pill tone={on ? "g" : "n"}>{on ? "Running" : "Not started"}</Pill>
+                <Pill tone={on ? "g" : "n"}>{s.who === "ads" ? "On call" : on ? "Running" : "Not started"}</Pill>
               </div>
             );
           })}
