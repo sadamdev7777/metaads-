@@ -249,7 +249,7 @@ type Integ = {
   secret_hint?: string | null;
   updated_by_email?: string | null;
   last_checked_at?: string | null;
-  config?: { accounts?: MetaAccount[]; selected?: string[] } | null;
+  config?: ({ accounts?: MetaAccount[]; selected?: string[] } & Record<string, unknown>) | null;
 };
 const FALLBACK: Integ[] = [
   { key: "travelcrm", name: "TravelCRM", used_for: "Products, dates, seats and deposits.", status: "not_set_up", detail: "Waiting for the TravelCRM MCP to be installed. Phase 1." },
@@ -314,13 +314,17 @@ function Integrations() {
         {rows.map((r) =>
           r.key === "meta_ads" ? (
             <MetaAdsCard key={r.key} row={r} reload={() => load(false)} />
+          ) : r.key === "website_form" ? (
+            <WebsiteFormCard key={r.key} row={r} reload={() => load(false)} />
+          ) : CONNECT[r.key] ? (
+            <SimpleConnect key={r.key} row={r} reload={() => load(false)} />
           ) : (
             <Card key={r.key} title={r.name} right={statusPill(r.status)}>
               <div className="text-sm">{r.used_for}</div>
               <div className="text-[13px] text-muted">{r.detail}</div>
               <div className="mt-auto flex justify-end">
-                <Btn kind="s" onClick={() => act(`Opened setup for ${r.name}`, "Settings, Integrations", `${r.name} is set up in a later phase.`)}>
-                  {r.status === "not_set_up" ? "Set up" : "Test connection"}
+                <Btn kind="s" onClick={() => act(`Opened setup for ${r.name}`, "Settings, Integrations", `${r.name} is on hold for now.`)}>
+                  On hold
                 </Btn>
               </div>
             </Card>
@@ -467,6 +471,245 @@ function MetaAdsCard({ row, reload }: { row: Integ; reload: () => Promise<void> 
         </fieldset>
       )}
       <p className="m-0 text-[13px] text-muted">Read only for now: the system cannot change anything in Meta until Phase 2.</p>
+    </Card>
+  );
+}
+
+type FieldDef = { name: string; label: string; secret?: boolean; note?: string; placeholder?: string; options?: string[] };
+const CONNECT: Record<string, { steps: string[]; fields: FieldDef[]; summary: (c: Record<string, unknown>) => string }> = {
+  whatsapp: {
+    steps: [
+      "In Meta Business Settings, give a system user access to the WhatsApp account and generate a token with whatsapp_business_messaging.",
+      "In WhatsApp Manager, copy the Phone number ID of the number that will send the messages.",
+      "List the numbers that should receive the daily report and approvals.",
+    ],
+    fields: [
+      { name: "token", label: "WhatsApp access token", secret: true },
+      { name: "phone_number_id", label: "Phone number ID", placeholder: "Numbers only", note: "The ID from WhatsApp Manager, not the phone number" },
+      { name: "recipients", label: "Recipients", placeholder: "60123456789, 60198765432", note: "Country code first, separated by commas" },
+    ],
+    summary: (c) => `Sends from ${c.verified_name ?? ""} ${c.display_phone_number ?? ""}. Recipients: ${((c.recipients as string[]) ?? []).join(", ") || "none yet"}.`,
+  },
+  meta_capi: {
+    steps: [
+      "In Meta Events Manager, open the dataset (pixel) used on the MTB website and copy its ID.",
+      "Leave the token empty to use the Meta Ads token, or paste a Conversions API token generated in Events Manager.",
+    ],
+    fields: [
+      { name: "dataset_id", label: "Dataset (pixel) ID", placeholder: "Numbers only" },
+      { name: "token", label: "Conversions API token (optional)", secret: true, note: "Empty means the Meta Ads token is used" },
+    ],
+    summary: (c) => `Dataset ${c.name ?? ""} (${c.dataset_id ?? ""}), using ${c.token_source === "own" ? "its own token" : "the Meta Ads token"}.`,
+  },
+  mailgun: {
+    steps: [
+      "In Mailgun, open Sending, then Domain settings, and create a Sending API key for the domain.",
+      "Enter the sending domain exactly as shown in Mailgun, and the region the domain was created in.",
+    ],
+    fields: [
+      { name: "api_key", label: "Mailgun API key", secret: true },
+      { name: "domain", label: "Sending domain", placeholder: "mg.example.com" },
+      { name: "region", label: "Region", options: ["US", "EU"] },
+    ],
+    summary: (c) => `Domain ${c.domain ?? ""}, region ${c.region ?? ""}.`,
+  },
+};
+
+const whenText = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "never");
+const INPUT_CLS = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+
+function useConnect(key: string, reload: () => Promise<void>) {
+  const { act } = useStore();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function call(action: string, extra: Record<string, unknown>, logText: string, okText: string) {
+    if (!supabase) {
+      setMsg({ ok: false, text: "Supabase is not connected in this build." });
+      return null;
+    }
+    setBusy(true);
+    setMsg(null);
+    const { data, error } = await supabase.functions.invoke("integration-connect", { body: { integration: key, action, ...extra } });
+    setBusy(false);
+    const ok = !error && data?.ok === true;
+    const text = ok ? okText : data?.error || error?.message || "Something went wrong.";
+    setMsg({ ok, text });
+    act(`${logText}${ok ? "" : " (failed)"}`, "Settings, Integrations", text);
+    await reload();
+    return ok ? (data as Record<string, unknown>) : null;
+  }
+  const note = msg && (
+    <div role="status" className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${msg.ok ? "bg-[#E3F2E9] text-[#17663F]" : "bg-[#FBE6E3] text-[#A3231B]"}`}>{msg.text}</div>
+  );
+  return { busy, call, note };
+}
+
+/** WhatsApp, Meta Conversions API and Mailgun: type the details once, they are checked and stored encrypted. */
+function SimpleConnect({ row, reload }: { row: Integ; reload: () => Promise<void> }) {
+  const def = CONNECT[row.key];
+  const cfg = (row.config ?? {}) as Record<string, unknown>;
+  const { busy, call, note } = useConnect(row.key, reload);
+  const [editing, setEditing] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const connected = Boolean(row.secret_hint);
+
+  function startEdit() {
+    const next: Record<string, string> = {};
+    def.fields.forEach((f) => {
+      if (f.secret) return;
+      const v = cfg[f.name];
+      next[f.name] = Array.isArray(v) ? v.join(", ") : v ? String(v) : "";
+    });
+    setValues(next);
+    setEditing(true);
+  }
+  async function save() {
+    const payload: Record<string, string> = {};
+    def.fields.forEach((f) => (payload[f.name] = values[f.name] ?? (f.options ? f.options[0] : "")));
+    const done = await call("save", payload, `Saved the ${row.name} connection`, `${row.name} checked and saved.`);
+    if (done) {
+      setValues({});
+      setEditing(false);
+    }
+  }
+
+  return (
+    <Card title={row.name} right={statusPill(row.status)} className="md:col-span-2">
+      <div className="text-sm">{row.used_for}</div>
+      <div className="text-[13px] text-muted">{row.detail}</div>
+      {connected && !editing ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-ground px-3 py-2.5 text-sm">
+          <div>
+            {def.summary(cfg)} Key ending <span className="font-mono">••••{row.secret_hint}</span>, saved by {row.updated_by_email || "unknown"}. Last checked {whenText(row.last_checked_at)}.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Btn small kind="s" disabled={busy} onClick={() => void call("test", {}, `Tested the ${row.name} connection`, `${row.name} is working.`)}>
+              Test connection
+            </Btn>
+            <Btn small kind="s" disabled={busy} onClick={startEdit}>
+              Edit
+            </Btn>
+            <Btn small kind="s" disabled={busy} onClick={() => void call("disconnect", {}, `Disconnected ${row.name}`, "Disconnected. The key was removed.")}>
+              Disconnect
+            </Btn>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <ol className="m-0 list-decimal pl-5 text-[13px] text-muted">
+            {def.steps.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ol>
+          <div className="flex flex-wrap items-start gap-3">
+            {def.fields.map((f) => {
+              const id = `${row.key}-${f.name}`;
+              return (
+                <div key={f.name} className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+                  <label htmlFor={id} className="text-[13px] font-semibold">
+                    {f.label}
+                  </label>
+                  {f.options ? (
+                    <select id={id} className={INPUT_CLS} value={values[f.name] ?? f.options[0]} onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}>
+                      {f.options.map((o) => (
+                        <option key={o}>{o}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id={id}
+                      type={f.secret ? "password" : "text"}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder={editing && f.secret ? "Leave empty to keep the saved one" : f.placeholder}
+                      value={values[f.name] ?? ""}
+                      onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                      className={INPUT_CLS}
+                    />
+                  )}
+                  {f.note && <div className="text-xs text-muted">{f.note}</div>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2">
+            <Btn disabled={busy} onClick={() => void save()}>
+              {busy ? "Checking…" : "Save and test"}
+            </Btn>
+            {editing && (
+              <Btn kind="s" disabled={busy} onClick={() => setEditing(false)}>
+                Cancel
+              </Btn>
+            )}
+          </div>
+        </div>
+      )}
+      {note}
+    </Card>
+  );
+}
+
+/** Website form: the system gives the website an address and a key, and the website sends each lead there. */
+function WebsiteFormCard({ row, reload }: { row: Integ; reload: () => Promise<void> }) {
+  const { busy, call, note } = useConnect("website_form", reload);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const hasKey = Boolean(row.secret_hint);
+  const hookUrl = (row.config as { url?: string } | null)?.url ?? `${import.meta.env.VITE_SUPABASE_URL ?? "https://<project>.supabase.co"}/functions/v1/leads-webhook`;
+  const sample = `POST ${hookUrl}
+x-webhook-key: ${fresh ?? (hasKey ? `••••${row.secret_hint}` : "<your key>")}
+Content-Type: application/json
+
+{
+  "phone": "0123456789",
+  "product": "Korea Winter",
+  "utm_source": "facebook",
+  "utm_campaign": "korea-winter-0510",
+  "utm_content": "PNG1",
+  "submitted_at": "2026-11-20T10:00:00+08:00"
+}`;
+
+  async function generate() {
+    const data = await call("generate_key", {}, hasKey ? "Replaced the website form webhook key" : "Created a website form webhook key", "Key created. Copy it now: it is not shown again.");
+    if (data?.key) setFresh(String(data.key));
+  }
+
+  return (
+    <Card title={row.name} right={statusPill(row.status)} className="md:col-span-2">
+      <div className="text-sm">{row.used_for}</div>
+      <div className="text-[13px] text-muted">{row.detail}</div>
+      <ol className="m-0 list-decimal pl-5 text-[13px] text-muted">
+        <li>Create a key here.</li>
+        <li>In the website, after a form is submitted, have the server send the lead to the address below with the key. Never put the key in browser code.</li>
+        <li>Submit one form on the website, then press Check for leads.</li>
+      </ol>
+      {fresh && (
+        <div className="rounded-lg bg-[#FBEFD5] px-3 py-2.5 text-sm text-[#5C3900]">
+          <div className="font-bold">Copy this key now. It is not shown again.</div>
+          <div className="mt-1 break-all font-mono text-[13px]">{fresh}</div>
+        </div>
+      )}
+      <pre className="m-0 max-w-full overflow-x-auto rounded-lg bg-ground p-3 text-[12px] leading-relaxed">{sample}</pre>
+      <div className="text-[13px] text-muted">
+        Only <span className="font-mono">phone</span> is required. Send <span className="font-mono">product</span> exactly as the product is named in TravelCRM, and{" "}
+        <span className="font-mono">utm_campaign</span> exactly as it arrives from the ad, so leads match the right product and campaign.
+        {hasKey && ` Current key ends ••••${row.secret_hint}, created by ${row.updated_by_email || "unknown"}.`}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Btn kind={hasKey ? "s" : "p"} disabled={busy} onClick={() => void generate()}>
+          {hasKey ? "Create a new key" : "Create key"}
+        </Btn>
+        {hasKey && (
+          <>
+            <Btn kind="s" disabled={busy} onClick={() => void call("test", {}, "Checked for leads from the website form", "Checked.")}>
+              Check for leads
+            </Btn>
+            <Btn kind="s" disabled={busy} onClick={() => void call("disconnect", {}, "Disconnected the website form", "Disconnected. The key no longer works.")}>
+              Disconnect
+            </Btn>
+          </>
+        )}
+      </div>
+      {note}
     </Card>
   );
 }

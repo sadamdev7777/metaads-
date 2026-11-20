@@ -45,7 +45,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={`flex flex-col gap-2.5 rounded-xl border border-line bg-white p-5 ${className}`}>
+    <section className={`flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-white p-5 ${className}`}>
       {(title || right) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {title && <h2 className="m-0 text-lg font-bold">{title}</h2>}
