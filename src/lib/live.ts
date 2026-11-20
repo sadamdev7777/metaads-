@@ -358,3 +358,8 @@ export async function setDepartureDestination(departureId: number, destinationId
 type DepCount = { bookings: number; pax: number };
 export type DepositTotals = { today: DepCount; yesterday: DepCount; week: DepCount; month: DepCount; first_date: string | null; last_date: string | null; last_synced: string | null };
 export const useDepositTotals = () => useRpc<DepositTotals | null>("deposit_totals", {}, null);
+
+/** Headline figures for the Dashboard: four periods, each with the period before it. */
+export type DashPeriod = { from: string; to: string; spend: number; leads: number; pax: number; bookings: number; prev: { from: string; to: string; spend: number | null; leads: number | null; pax: number | null } };
+export type DashTotals = { periods: Record<"today" | "yesterday" | "week" | "month", DashPeriod>; target: number | null; limit: number | null; monthly_budget: number | null; days_in_month: number; day_of_month: number; deposits_from: string | null; deposits_loaded: string | null };
+export const useDashTotals = () => useRpc<DashTotals | null>("dashboard_totals", {}, null);

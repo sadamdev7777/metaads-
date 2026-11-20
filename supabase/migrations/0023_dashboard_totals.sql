@@ -1,0 +1,2 @@
+-- dashboard_totals(): spend, leads, paid-deposit pax and bookings for today, yesterday, last 7 days and this month,
+-- each with the period before it, plus target, limit and monthly budget. Applied on 2026-11-21 as "dashboard_totals".
