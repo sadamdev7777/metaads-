@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { B, Btn, Card, PageHead, Pill, RunBy } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { COUNTRIES, type CampaignRow, applySuggestions, count, cpl, delivery, guessCountry, guessRunBy, rm, saveTag, syncNow, useCampaigns, useMonthTotals, when } from "../lib/live";
+import { useEffect } from "react";
+import { type CampaignRow, type Destination, count, cpl, delivery, fetchDestinations, guessRunBy, rm, saveTag, syncNow, useCampaigns, useMonthTotals, when } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -35,7 +36,12 @@ export default function Campaigns() {
   const [show, setShow] = useState("Active or with spend");
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(PAGE);
-  const [edit, setEdit] = useState<{ id: string; country: string; runBy: string } | null>(null);
+  const [edit, setEdit] = useState<{ id: string; dest: string; runBy: string } | null>(null);
+  const [dests, setDests] = useState<Destination[]>([]);
+  useEffect(() => {
+    void fetchDestinations().then(setDests);
+  }, []);
+  const COUNTRIES = useMemo(() => Array.from(new Set(dests.map((d) => d.country))).sort(), [dests]);
   const [busy, setBusy] = useState(false);
 
   const people = useMemo(() => Array.from(new Set(data.map((c) => c.run_by).filter(Boolean) as string[])).sort(), [data]);
@@ -44,7 +50,7 @@ export default function Campaigns() {
     return data.filter((c) => {
       if (show === "Active or with spend" && !(c.delivery_status === "ACTIVE" || c.spend > 0)) return false;
       if (show === "Active only" && c.delivery_status !== "ACTIVE") return false;
-      if (show === "Not tagged" && c.country) return false;
+      if (show === "Not tagged" && c.destination_id) return false;
       if (country !== "All countries" && (country === "Not tagged" ? Boolean(c.country) : c.country !== country)) return false;
       if (runBy !== "Everyone" && c.run_by !== runBy) return false;
       return !text || c.name.toLowerCase().includes(text);
@@ -52,21 +58,21 @@ export default function Campaigns() {
   }, [data, show, country, runBy, q]);
 
   const relevant = data.filter((c) => c.delivery_status === "ACTIVE" || c.spend > 0);
-  const untagged = relevant.filter((c) => !c.country);
+  const untagged = relevant.filter((c) => !c.destination_id);
   const untaggedSpend = untagged.reduce((n, c) => n + c.spend, 0);
   const sum = rows.reduce((t, c) => ({ spend: t.spend + c.spend, leads: t.leads + c.leads }), { spend: 0, leads: 0 });
 
   async function save(c: CampaignRow) {
     if (!edit) return;
     setBusy(true);
-    const nextCountry = edit.country || null;
+    const dest = dests.find((d) => d.id === edit.dest) ?? null;
     const nextRunBy = edit.runBy.trim() || null;
-    const err = await saveTag(c.id, nextCountry, nextRunBy, user?.email ?? "");
+    const err = await saveTag(c.id, dest, nextRunBy, user?.email ?? "");
     setBusy(false);
     if (err) return act(`Tagging ${c.name} failed`, "Campaigns", err);
-    setData((list) => list.map((x) => (x.id === c.id ? { ...x, country: nextCountry, run_by: nextRunBy } : x)));
+    setData((list) => list.map((x) => (x.id === c.id ? { ...x, destination_id: dest?.id ?? null, destination: dest?.name ?? null, country: dest?.country ?? null, destination_manual: true, run_by: nextRunBy } : x)));
     setEdit(null);
-    act(`Tagged campaign ${c.name}: country ${nextCountry ?? "none"}, run by ${nextRunBy ?? "none"}`, "Campaigns", "Tag saved.");
+    act(`Set destination of ${c.name} to ${dest?.name ?? "none"}, run by ${nextRunBy ?? "none"}`, "Campaigns", "Saved. This one is now set by hand and will not be changed by the list.");
   }
   async function sync() {
     setBusy(true);
@@ -76,14 +82,6 @@ export default function Campaigns() {
     await Promise.all([reload(), totals.reload()]);
   }
 
-  const suggestable = untagged.filter((c) => guessCountry(c.name));
-  async function applyAll() {
-    setBusy(true);
-    const n = await applySuggestions(suggestable, user?.email ?? "");
-    setBusy(false);
-    act(`Applied suggested country and run-by tags to ${n} campaigns`, "Campaigns", `${n} campaign${n === 1 ? "" : "s"} tagged from their names. Check them and fix any that are wrong.`);
-    await reload();
-  }
   const last = totals.data?.last_good_sync;
   return (
     <>
@@ -108,19 +106,17 @@ export default function Campaigns() {
         <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-[#FBEFD5] px-5 py-4">
           <div className="min-w-0 flex-[1_1_360px]">
             <div className="text-sm font-bold text-[#5C3900]">
-              {untagged.length} running campaign{untagged.length === 1 ? " has" : "s have"} no country tag
+              {untagged.length} running campaign{untagged.length === 1 ? " is" : "s are"} not matched to a destination
             </div>
             <div className="text-sm">
-              {rm(untaggedSpend)} of spend in this period is not counted under any country. Tag the country and who ran it. A suggestion is shown when the
-              name has a place in it.
+              {rm(untaggedSpend)} of spend in this period is not counted anywhere. Add the destination or a keyword in Settings, Destinations, or set
+              it by hand here.
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {suggestable.length > 0 && (
-              <Btn disabled={busy} onClick={() => void applyAll()}>
-                Apply {suggestable.length} suggestion{suggestable.length === 1 ? "" : "s"}
-              </Btn>
-            )}
+            <Link to="/settings/destinations" className="flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
+              Open Destinations
+            </Link>
             <Btn
               kind="s"
               onClick={() => {
@@ -155,7 +151,7 @@ export default function Campaigns() {
           <table className="w-full border-collapse" style={{ minWidth: 1020 }}>
             <thead>
               <tr>
-                {["Campaign", "Country", "Run by", "Delivery", "Budget a day", "Spend", "Leads (Meta)", "CPL", ""].map((h, i) => (
+                {["Campaign", "Destination", "Run by", "Delivery", "Budget a day", "Spend", "Leads (Meta)", "CPL", ""].map((h, i) => (
                   <th key={i} className={`whitespace-nowrap border-b border-line px-3 py-2.5 text-xs font-semibold text-muted ${i >= 4 && i <= 7 ? "text-right" : "text-left"}`}>
                     {h}
                   </th>
@@ -165,7 +161,6 @@ export default function Campaigns() {
             <tbody>
               {rows.slice(0, shown).map((c) => {
                 const d = delivery(c.delivery_status);
-                const guess = c.country ? null : guessCountry(c.name);
                 const editing = edit?.id === c.id;
                 const cell = "border-b border-line px-3 py-3 align-top text-sm";
                 return (
@@ -175,16 +170,21 @@ export default function Campaigns() {
                     </td>
                     <td className={cell}>
                       {editing ? (
-                        <select aria-label="Country" value={edit.country} onChange={(e) => setEdit({ ...edit, country: e.target.value })} className={INPUT}>
-                          <option value="">No country</option>
-                          {COUNTRIES.map((o) => (
-                            <option key={o}>{o}</option>
+                        <select aria-label="Destination" value={edit.dest} onChange={(e) => setEdit({ ...edit, dest: e.target.value })} className={INPUT}>
+                          <option value="">No destination</option>
+                          {dests.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.name}
+                            </option>
                           ))}
                         </select>
-                      ) : c.country ? (
-                        <Pill tone="t">{c.country}</Pill>
+                      ) : c.destination ? (
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <Pill tone="t">{c.destination}</Pill>
+                          {c.destination_manual && <span className="text-xs text-muted">set by hand</span>}
+                        </span>
                       ) : (
-                        <Pill tone="a">{guess ? `Suggested: ${guess}` : "Not tagged"}</Pill>
+                        <Pill tone="a">Not matched</Pill>
                       )}
                     </td>
                     <td className={cell}>
@@ -214,8 +214,8 @@ export default function Campaigns() {
                           </Btn>
                         </span>
                       ) : (
-                        <Btn small kind={c.country ? "s" : "p"} onClick={() => setEdit({ id: c.id, country: c.country ?? guess ?? "", runBy: c.run_by ?? guessRunBy(c.name) ?? "" })}>
-                          {c.country ? "Edit tag" : "Tag"}
+                        <Btn small kind={c.destination_id ? "s" : "p"} onClick={() => setEdit({ id: c.id, dest: c.destination_id ?? "", runBy: c.run_by ?? guessRunBy(c.name) ?? "" })}>
+                          {c.destination_id ? "Change" : "Set"}
                         </Btn>
                       )}
                     </td>
@@ -241,8 +241,8 @@ export default function Campaigns() {
       </Card>
 
       <p className="m-0 text-[13px] text-muted">
-        Leads are the leads Meta counts. Deposits and cost per pax appear once TravelCRM is connected. Tags you save are kept when the next sync runs.
-        Meta is checked every hour.
+        Destination and Run by are read from the campaign name, using the list in Settings, Destinations. Leads are the leads Meta counts. Meta is
+        checked every hour.
       </p>
     </>
   );

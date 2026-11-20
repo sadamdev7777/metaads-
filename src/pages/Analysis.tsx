@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { B, Card, PageHead, Pill, RunBy, T } from "../components/ui";
-import { type AdSetRow, type CampaignRow, count, cpl, delivery, fetchTree, paxLabel, paxTone, perPax, rm, rm2, useCampaigns, useCountryCost, useMonthTotals, when } from "../lib/live";
+import { type AdSetRow, type CampaignRow, count, cpl, delivery, fetchTree, paxLabel, paxTone, perPax, rm, rm2, useCampaigns, useDestinationCost, useMonthTotals, when } from "../lib/live";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 type Group = { key: string; campaigns: number; spend: number; leads: number; impressions: number; clicks: number };
@@ -29,8 +29,9 @@ export default function Analysis() {
   const { data, loading, error } = useCampaigns(nDays);
   const totals = useMonthTotals();
   const [country, setCountry] = useState("All countries");
-  const cost = useCountryCost(nDays);
+  const cost = useDestinationCost(nDays);
   const costRows = (cost.data?.rows ?? []).filter((r) => r.spend > 0 || r.pax > 0);
+  const costCountries = Array.from(new Set(costRows.map((r) => r.country)));
   const windowStart = new Date(Date.now() - (nDays - 1) * 86400000).toISOString().slice(0, 10);
   const partial = Boolean(cost.data?.first_booking_date && cost.data.first_booking_date > windowStart);
   const [open, setOpen] = useState<Record<string, AdSetRow[] | "loading">>({});
@@ -69,43 +70,68 @@ export default function Analysis() {
       {error && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]">Could not load the figures: {error}</div>}
       {untagged.length > 0 && (
         <div className="rounded-xl bg-[#FBEFD5] px-5 py-4 text-sm">
-          <B>{untagged.length} campaign{untagged.length === 1 ? "" : "s"} with spend are not tagged</B>, so {rm(untagged.reduce((n, c) => n + c.spend, 0))} sits under
+          <B>{untagged.length} campaign{untagged.length === 1 ? "" : "s"} with spend are not matched to a destination</B>, so {rm(untagged.reduce((n, c) => n + c.spend, 0))} sits under
           “Not tagged” below.{" "}
-          <Link to="/campaigns" className="font-semibold">
-            Tag them in Campaigns
+          <Link to="/settings/destinations" className="font-semibold">
+            Fix it in Settings, Destinations
           </Link>
         </div>
       )}
 
-      <Card title="Cost per pax deposit, by country" sub="Ad spend from Meta against deposit pax from TravelCRM, for the same days. An estimate: deposits are not matched to individual ads.">
+      <Card title="Cost per pax deposit, by destination" sub="Ad spend from Meta against deposit pax from TravelCRM, for the same days. An estimate: deposits are not matched to individual ads.">
         {partial && (
           <div className="rounded-lg bg-[#FBEFD5] px-3 py-2 text-[13px]">
             Deposits are loaded only from {cost.data?.first_booking_date}, so pax is undercounted and cost per pax reads too high for this period. The
             nightly load fills the rest.
           </div>
         )}
-        <T
-          minW={860}
-          right={[1, 2, 3, 4, 5]}
-          heads={["Country", "Spend", "Leads (Meta)", "Deposit pax", "Likely agent pax", "Cost per pax", "Against RM50 / RM80"]}
-          rows={costRows.map((r) => {
-            const v = perPax(r);
-            return [
-              r.country === "Not tagged" || r.country === "Unknown" ? <Pill tone="a">{r.country === "Unknown" ? "Country unknown" : r.country}</Pill> : <B>{r.country}</B>,
-              r.spend ? rm(r.spend) : "",
-              r.leads ? count(r.leads) : "",
-              r.pax ? count(r.pax) : "",
-              r.pax_shared ? count(r.pax_shared) : "",
-              v === null ? "" : rm2(v),
-              r.spend > 0 && r.country !== "Not tagged" ? <Pill tone={paxTone(v)}>{paxLabel(v)}</Pill> : "",
-            ];
-          })}
-        />
-        {!cost.loading && costRows.length === 0 && <div className="text-sm text-muted">No deposits loaded yet.</div>}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse" style={{ minWidth: 900 }}>
+            <thead>
+              <tr>
+                {["Destination", "Campaigns", "Spend", "Leads (Meta)", "Deposit pax", "Likely agent pax", "Cost per pax", "Against RM50 / RM80"].map((h, i) => (
+                  <th key={h} className={`whitespace-nowrap border-b border-line px-3 py-2.5 text-xs font-semibold text-muted ${i >= 1 && i <= 6 ? "text-right" : "text-left"}`}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {costCountries.map((cn) => {
+                const group = costRows.filter((r) => r.country === cn);
+                const sumRow = group.reduce((t, r) => ({ spend: t.spend + r.spend, leads: t.leads + r.leads, campaigns: t.campaigns + r.campaigns, pax: t.pax + r.pax, pax_direct: t.pax_direct + r.pax_direct, pax_shared: t.pax_shared + r.pax_shared }), { spend: 0, leads: 0, campaigns: 0, pax: 0, pax_direct: 0, pax_shared: 0 });
+                const line = (label: React.ReactNode, r: typeof sumRow, head: boolean, judge: boolean, key: string) => {
+                  const v = perPax(r);
+                  return (
+                    <tr key={key} style={head ? { background: "#F1F4F1" } : undefined}>
+                      <td className={`${txt} ${head ? "font-bold" : ""}`} style={head ? undefined : { paddingLeft: 30 }}>{label}</td>
+                      <td className={num}>{r.campaigns ? count(r.campaigns) : ""}</td>
+                      <td className={num}>{r.spend ? rm(r.spend) : ""}</td>
+                      <td className={num}>{r.leads ? count(r.leads) : ""}</td>
+                      <td className={num}>{r.pax ? count(r.pax) : ""}</td>
+                      <td className={num}>{r.pax_shared ? count(r.pax_shared) : ""}</td>
+                      <td className={`${num} ${head ? "font-bold" : ""}`}>{v === null ? "" : rm2(v)}</td>
+                      <td className={txt}>{judge && r.spend > 0 ? <Pill tone={paxTone(v)}>{paxLabel(v)}</Pill> : ""}</td>
+                    </tr>
+                  );
+                };
+                const loose = cn === "Unknown" || cn === "Not matched";
+                return (
+                  <Fragment key={cn}>
+                    {line(loose ? <Pill tone="a">{cn === "Unknown" ? "Deposits with no package details" : "Campaigns not matched"}</Pill> : cn, sumRow, true, !loose, `c-${cn}`)}
+                    {group.filter((r) => r.matched && (group.length > 1 || r.destination !== cn)).map((r) => line(r.destination, r, false, true, `d-${r.destination}`))}
+                    {!loose && group.filter((r) => !r.matched).map((r) => line(<span className="text-muted">Other {cn} deposits, no destination</span>, r, false, false, `x-${cn}`))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {!cost.loading && costRows.length === 0 && <div className="text-sm text-muted">No spend or deposits in this period.</div>}
         <div className="text-[13px] text-muted">
           Cost per pax leaves out “likely agent” pax: bookings whose contact number appears on 3 or more bookings, which look like agent or staff
-          entries. Deposits from repeat customers and other channels are still counted, so the true cost from ads alone is higher than shown. Last
-          loaded {when(cost.data?.last_synced)}.
+          entries. Deposits from repeat customers and other channels are still counted, so the true cost from ads alone is higher than shown. Change
+          what counts together in <Link to="/settings/destinations" className="font-semibold">Settings, Destinations</Link>. Last loaded {when(cost.data?.last_synced)}.
         </div>
       </Card>
 

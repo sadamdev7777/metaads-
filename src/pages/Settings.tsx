@@ -4,12 +4,13 @@ import { Avatar, B, Bar, Btn, Card, Field, PageHead, Pill, Stat, T } from "../co
 import { fetchActivity, type ActivityRow } from "../lib/activity";
 import { useAuth } from "../lib/auth";
 import { MODE_ROWS } from "../lib/data";
-import { analyst, rm, useCampaigns, useMonthTotals, when } from "../lib/live";
+import { type Destination, analyst, count, fetchDestinations, rematch, removeDestination, rm, saveDestination, useCampaigns, useDestinationCost, useMonthTotals, when } from "../lib/live";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 
 const TABS = [
   { key: "rules", label: "Rules", sub: "AI staff follow these as soon as they are saved." },
+  { key: "destinations", label: "Destinations", sub: "Your own list. It decides which campaigns and TravelCRM packages count together." },
   { key: "budget", label: "Budget", sub: "Plan and track monthly spend by country." },
   { key: "integrations", label: "Integrations", sub: "Check that every connection the system depends on is working." },
   { key: "data-health", label: "Data Health", sub: "How far the numbers can be trusted." },
@@ -38,6 +39,7 @@ export default function Settings() {
         ))}
       </nav>
       {tab === "rules" && <Rules />}
+      {tab === "destinations" && <Destinations />}
       {tab === "budget" && <Budget />}
       {tab === "integrations" && <Integrations />}
       {tab === "data-health" && <DataHealth />}
@@ -195,6 +197,143 @@ function Rules() {
   );
 }
 
+/* ---------------- Destinations ---------------- */
+
+const DEST_INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+type DestDraft = { id?: string; name: string; country: string; keywords: string };
+
+function Destinations() {
+  const { user } = useAuth();
+  const { act } = useStore();
+  const [list, setList] = useState<Destination[]>([]);
+  const [draft, setDraft] = useState<DestDraft | null>(null);
+  const [busy, setBusy] = useState(false);
+  const running = useCampaigns(30);
+  const cost = useDestinationCost(30);
+  const load = () => fetchDestinations().then(setList);
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const unmatched = running.data.filter((c) => (c.delivery_status === "ACTIVE" || c.spend > 0) && !c.destination_id);
+  const looseDeposits = (cost.data?.rows ?? []).filter((r) => !r.matched && r.pax > 0);
+  const useCount = (d: Destination) => running.data.filter((c) => c.destination_id === d.id && (c.delivery_status === "ACTIVE" || c.spend > 0)).length;
+
+  async function save() {
+    if (!draft) return;
+    const keywords = draft.keywords.split(",").map((k) => k.trim().toLowerCase()).filter((k) => k.length >= 3);
+    if (!draft.name.trim() || !draft.country.trim()) return act("Tried to save a destination without a name or country", "Settings, Destinations", "Enter a name and a country.");
+    setBusy(true);
+    const err = await saveDestination({ id: draft.id, name: draft.name, country: draft.country, keywords }, user?.email ?? "");
+    if (err) {
+      setBusy(false);
+      return act(`Saving destination ${draft.name} failed`, "Settings, Destinations", err.includes("duplicate") ? "A destination with that name already exists." : err);
+    }
+    const r = await rematch();
+    setBusy(false);
+    act(`${draft.id ? "Changed" : "Added"} destination ${draft.name}`, "Settings, Destinations", `Saved. ${r?.campaigns_changed ?? 0} campaigns and ${r?.departures_changed ?? 0} packages re-matched.`);
+    setDraft(null);
+    await Promise.all([load(), running.reload(), cost.reload()]);
+  }
+  async function remove(d: Destination) {
+    setBusy(true);
+    const err = await removeDestination(d.id);
+    const r = err ? null : await rematch();
+    setBusy(false);
+    act(`Removed destination ${d.name}${err ? " (failed)" : ""}`, "Settings, Destinations", err ?? `Removed. ${r?.campaigns_changed ?? 0} campaigns re-matched.`);
+    await Promise.all([load(), running.reload(), cost.reload()]);
+  }
+
+  const form = draft && (
+    <Card title={draft.id ? "Change destination" : "New destination"}>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+          <label htmlFor="dn" className="text-[13px] font-semibold">Name</label>
+          <input id="dn" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Korea - Winter" className={DEST_INPUT} />
+          <div className="text-xs text-muted">Shown in every report. Suggested form: Country - Destination.</div>
+        </div>
+        <div className="flex min-w-[160px] flex-1 flex-col gap-1.5">
+          <label htmlFor="dc" className="text-[13px] font-semibold">Country</label>
+          <input id="dc" list="countries" value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} placeholder="Korea" className={DEST_INPUT} />
+          <datalist id="countries">
+            {Array.from(new Set(list.map((d) => d.country))).map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          <div className="text-xs text-muted">Destinations with the same country are added up together.</div>
+        </div>
+        <div className="flex min-w-[260px] flex-[2] flex-col gap-1.5">
+          <label htmlFor="dk" className="text-[13px] font-semibold">Words to look for</label>
+          <input id="dk" value={draft.keywords} onChange={(e) => setDraft({ ...draft, keywords: e.target.value })} placeholder="korea winter, winter korea" className={DEST_INPUT} />
+          <div className="text-xs text-muted">Separate with commas. Looked for in campaign names and in TravelCRM package names. The longest match wins, so “korea winter” beats “korea”.</div>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Btn disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save and re-match"}</Btn>
+        <Btn kind="s" disabled={busy} onClick={() => setDraft(null)}>Cancel</Btn>
+      </div>
+    </Card>
+  );
+
+  return (
+    <>
+      <div className="rounded-xl bg-[#E6F1EE] px-5 py-4 text-sm">
+        <B>How it works.</B> A campaign or a TravelCRM package belongs to a destination when its name contains the destination name or one of its
+        words. Name new campaigns <B>Country - Destination date - Staff</B> (for example “Korea - Winter 1/12 - Haniss”) and they match by themselves.
+        Change this list any time: every report follows.
+      </div>
+
+      {form}
+
+      <Card title={`Destinations (${list.length})`} right={!draft ? <Btn onClick={() => setDraft({ name: "", country: "", keywords: "" })}>Add destination</Btn> : undefined} className="!p-3">
+        <T
+          minW={820}
+          right={[3]}
+          heads={["Destination", "Country", "Words to look for", "Running campaigns", ""]}
+          rows={list.map((d) => [
+            <B>{d.name}</B>,
+            d.country,
+            d.keywords.join(", "),
+            count(useCount(d)),
+            <span className="inline-flex gap-1.5">
+              <Btn small kind="s" disabled={busy} onClick={() => setDraft({ id: d.id, name: d.name, country: d.country, keywords: d.keywords.join(", ") })}>Change</Btn>
+              <Btn small kind="s" disabled={busy} onClick={() => void remove(d)}>Remove</Btn>
+            </span>,
+          ])}
+        />
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card title="Campaigns not matched" right={<Pill tone={unmatched.length ? "a" : "g"}>{unmatched.length}</Pill>}>
+          {unmatched.length === 0 ? (
+            <div className="text-sm">Every running campaign has a destination.</div>
+          ) : (
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm">
+              {unmatched.slice(0, 30).map((c) => (
+                <li key={c.id} className="flex justify-between gap-3 border-b border-line pb-1.5">
+                  <span>{c.name}</span>
+                  <span className="whitespace-nowrap text-muted">{c.spend ? rm(c.spend) : ""}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="text-[13px] text-muted">Add a destination or a word above, or set one by hand in Campaigns.</div>
+        </Card>
+        <Card title="Deposits not matched" right={<Pill tone={looseDeposits.length ? "a" : "g"}>{count(looseDeposits.reduce((n, r) => n + r.pax, 0))} pax</Pill>}>
+          {looseDeposits.length === 0 ? (
+            <div className="text-sm">Every deposit belongs to a destination.</div>
+          ) : (
+            <T minW={300} right={[1, 2]} heads={["Country in TravelCRM", "Bookings", "Pax"]} rows={looseDeposits.map((r) => [r.country === "Unknown" ? "Package not found" : r.country, count(r.bookings), count(r.pax)])} />
+          )}
+          <div className="text-[13px] text-muted">
+            {cost.data?.bookings_without_package ? `${cost.data.bookings_without_package} of ${cost.data.bookings_stored} bookings have no package details yet. The nightly load looks them up; some TravelCRM answers “not found”.` : "Package details are loaded for every booking."}
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+}
+
 /* ---------------- Budget ---------------- */
 
 function Budget() {
@@ -310,6 +449,8 @@ function Integrations() {
             <MetaAdsCard key={r.key} row={r} reload={() => load(false)} />
           ) : r.key === "ai_model" ? (
             <AiModelCard key={r.key} row={r} reload={() => load(false)} />
+          ) : r.key === "travelcrm" ? (
+            <TravelCrmCard key={r.key} row={r} />
           ) : r.key === "website_form" ? (
             <WebsiteFormCard key={r.key} row={r} reload={() => load(false)} />
           ) : CONNECT[r.key] ? (
@@ -328,6 +469,31 @@ function Integrations() {
         )}
       </div>
     </>
+  );
+}
+
+/** TravelCRM: closed bookings are loaded each night by a Claude scheduled task, so there is no key to enter here. */
+function TravelCrmCard({ row }: { row: Integ }) {
+  const cost = useDestinationCost(30);
+  const d = cost.data;
+  const fresh = d?.last_synced ? Date.now() - new Date(d.last_synced).getTime() < 36 * 3600000 : false;
+  return (
+    <Card title="TravelCRM" right={statusPill(d ? (fresh ? "connected" : d.bookings_stored ? "check" : "not_set_up") : row.status)} className="md:col-span-2">
+      <div className="text-sm">Closed bookings (paid deposit and full payment), used to work out cost per pax deposit by destination.</div>
+      <div className="flex flex-wrap gap-4">
+        <Stat label="Last load" value={when(d?.last_synced)} sub={fresh ? "Every night at 00:45" : "Expected every night at 00:45"} />
+        <Stat label="Bookings stored" value={d ? count(d.bookings_stored) : "…"} sub={d?.first_booking_date ? `from ${d.first_booking_date}` : ""} />
+        <Stat label="No package details" value={d ? count(d.bookings_without_package) : "…"} sub="counted as unknown" />
+      </div>
+      {d && !fresh && d.bookings_stored > 0 && (
+        <div className="rounded-lg bg-[#FBEFD5] px-3 py-2 text-[13px]">The last load is more than 36 hours old. The nightly task may have failed: check the scheduled task in Claude.</div>
+      )}
+      <div className="text-[13px] text-muted">
+        Connected through the TravelCRM connector on the owner's Claude account, not with a key in this system. A scheduled task in Claude reads new
+        bookings each night and saves them here. No customer names, emails or full phone numbers are stored. To stop it, pause the task “MTB: tarik
+        deposit TravelCRM setiap malam” in Claude.
+      </div>
+    </Card>
   );
 }
 

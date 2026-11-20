@@ -11,6 +11,9 @@ export type CampaignRow = {
   objective: string | null;
   daily_budget: number | null;
   meta_created_at: string | null;
+  destination_id: string | null;
+  destination: string | null;
+  destination_manual: boolean;
   spend: number;
   leads: number;
   impressions: number;
@@ -102,9 +105,12 @@ export async function fetchTree(campaignId: string, days: number): Promise<AdSet
   return (data ?? []) as AdSetRow[];
 }
 
-export async function saveTag(id: string, country: string | null, runBy: string | null, email: string) {
+export async function saveTag(id: string, dest: Destination | null, runBy: string | null, email: string) {
   if (!supabase) return "Supabase is not connected in this build.";
-  const { error } = await supabase.from("campaigns").update({ country, run_by: runBy, tagged_by_email: email, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase
+    .from("campaigns")
+    .update({ destination_id: dest?.id ?? null, country: dest?.country ?? null, destination_manual: true, run_by: runBy, tagged_by_email: email, updated_at: new Date().toISOString() })
+    .eq("id", id);
   return error?.message ?? null;
 }
 
@@ -188,14 +194,31 @@ export const perPax = (c: { spend: number; pax_direct: number }) => (c.pax_direc
 export const paxTone = (v: number | null) => (v === null ? "n" : v > 80 ? "r" : v <= 50 ? "g" : "a") as "n" | "r" | "g" | "a";
 export const paxLabel = (v: number | null) => (v === null ? "No figure" : v > 80 ? "Over RM80" : v <= 50 ? "On target" : "Watch");
 
-export async function applySuggestions(rows: CampaignRow[], email: string) {
-  if (!supabase) return 0;
-  let done = 0;
-  for (const c of rows) {
-    const country = guessCountry(c.name);
-    if (c.country || !country) continue;
-    const { error } = await supabase.from("campaigns").update({ country, run_by: c.run_by ?? guessRunBy(c.name), tagged_by_email: email, updated_at: new Date().toISOString() }).eq("id", c.id);
-    if (!error) done += 1;
-  }
-  return done;
+/* ---------- Destinations: the owner's list that ties campaigns and TravelCRM packages together ---------- */
+export type Destination = { id: string; name: string; country: string; keywords: string[] };
+export type DestCost = { destination: string | null; country: string; matched: boolean; spend: number; leads: number; campaigns: number; bookings: number; pax: number; pax_direct: number; pax_shared: number };
+export type DestCostData = { first_booking_date: string | null; last_synced: string | null; bookings_stored: number; bookings_without_package: number; rows: DestCost[] };
+export const useDestinationCost = (days: number) => useRpc<DestCostData | null>("destination_cost", { p_days: days }, null);
+
+export async function fetchDestinations(): Promise<Destination[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("destinations").select("id, name, country, keywords").order("country").order("name");
+  return (data ?? []) as Destination[];
+}
+export async function saveDestination(d: { id?: string; name: string; country: string; keywords: string[] }, email: string) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  const row = { name: d.name.trim(), country: d.country.trim(), keywords: d.keywords, updated_by_email: email, updated_at: new Date().toISOString() };
+  const { error } = d.id ? await supabase.from("destinations").update(row).eq("id", d.id) : await supabase.from("destinations").insert(row);
+  return error?.message ?? null;
+}
+export async function removeDestination(id: string) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  const { error } = await supabase.from("destinations").delete().eq("id", id);
+  return error?.message ?? null;
+}
+/** Re-reads every campaign name and TravelCRM package against the list. */
+export async function rematch() {
+  if (!supabase) return null;
+  const { data } = await supabase.rpc("apply_destinations");
+  return data as { campaigns_changed: number; departures_changed: number } | null;
 }
