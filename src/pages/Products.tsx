@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { B, Card, PageHead, Pill, Stat } from "../components/ui";
+import { B, Card, PageHead, Pill, Stat, Mini } from "../components/ui";
 import { type Departure, type Destination, count, fetchDepartures, fetchDestinations, when } from "../lib/live";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -107,6 +107,10 @@ export default function Products() {
                             <Pill tone="a">No destination</Pill>
                           </span>
                         )}
+                        <Mini>
+                          {dated.length ? `${day(dated[0].departure_date)} to ${day(dated[dated.length - 1].departure_date)}` : "No dates"} · {count(g.list.length)} dates · {count(seats)} seats left
+                          {taken ? ` · ${count(taken)} deposit pax` : ""}
+                        </Mini>
                       </td>
                       <td className={`${td} whitespace-nowrap`}>{dated.length ? day(dated[0].departure_date) : ""}</td>
                       <td className={`${td} whitespace-nowrap`}>{dated.length ? day(dated[dated.length - 1].departure_date) : ""}</td>

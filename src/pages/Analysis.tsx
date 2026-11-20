@@ -1,8 +1,8 @@
 import { Fragment, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { B, Card, PageHead, Pill, RunBy, T } from "../components/ui";
+import { B, Card, PageHead, Pill, RunBy, T, Mini } from "../components/ui";
 import { useEffect } from "react";
-import { PERIODS, type AdSetRow, type CampaignRow, type Proposal, type Report, confTone, count, cpl, delivery, fetchLatestReport, fetchPendingProposals, fetchTreeIn, paxLabel, paxTone, perPax, period, rm, rm2, useCampaignsIn, useDestinationCostIn, useMonthTotals, when } from "../lib/live";
+import { PERIODS, type AdSetRow, type CampaignRow, type Proposal, type Report, confTone, count, cpl, delivery, fetchLatestReport, fetchPendingProposals, fetchTreeIn, paxLabel, paxTone, perPax, period, rm, rm2, useCampaignsIn, useDestinationCostIn, useMonthTotals, when, spanText } from "../lib/live";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 type Group = { key: string; campaigns: number; spend: number; leads: number; impressions: number; clicks: number };
@@ -65,7 +65,7 @@ export default function Analysis() {
     <>
       <PageHead
         title="Analysis"
-        sub={`Step 4. ${range.from === range.to ? range.from : `${range.from} to ${range.to}`}. Campaigns with spend only. Last sync ${when(totals.data?.last_good_sync)}.`}
+        sub={`Step 4. ${spanText(range)}. Campaigns with spend only. Last sync ${when(totals.data?.last_good_sync)}.`}
         right={
           <select aria-label="Period" value={days} onChange={(e) => { setDays(e.target.value); setOpen({}); }} className={INPUT}>
             {PERIODS.map((o) => (
@@ -166,7 +166,14 @@ export default function Analysis() {
                   const v = perPax(r);
                   return (
                     <tr key={key} style={head ? { background: "#F1F4F1" } : undefined}>
-                      <td className={`${txt} ${head ? "font-bold" : ""}`} style={head ? undefined : { paddingLeft: 30 }}>{label}</td>
+                      <td className={`${txt} ${head ? "font-bold" : ""}`} style={head ? undefined : { paddingLeft: 30 }}>
+                        {label}
+                        <Mini>
+                          {r.spend ? rm(r.spend) : "No spend"}
+                          {r.pax ? ` · ${count(r.pax)} pax` : ""}
+                          {v !== null ? ` · ${rm2(v)} a pax` : ""}
+                        </Mini>
+                      </td>
                       <td className={num}>{r.campaigns ? count(r.campaigns) : ""}</td>
                       <td className={num}>{r.spend ? rm(r.spend) : ""}</td>
                       <td className={num}>{r.leads ? count(r.leads) : ""}</td>
@@ -245,7 +252,12 @@ export default function Analysis() {
                 return (
                   <Fragment key={c.id}>
                     <tr style={{ background: "#F1F4F1" }}>
-                      <td className={`${txt} font-bold`}>{c.name}</td>
+                      <td className={`${txt} font-bold`}>
+                        {c.name}
+                        <Mini>
+                          {rm(c.spend)} · {count(c.leads)} leads{c.leads ? ` · ${cpl(c.spend, c.leads)} each` : ""}
+                        </Mini>
+                      </td>
                       <td className={txt}>{c.country ? <Pill tone="t">{c.country}</Pill> : <Pill tone="a">{NONE}</Pill>}</td>
                       <td className={txt}>{c.run_by ? <RunBy k={c.run_by} /> : ""}</td>
                       <td className={txt}>

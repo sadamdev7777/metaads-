@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { B, Btn, Card, PageHead, Pill, RunBy } from "../components/ui";
+import { B, Btn, Card, PageHead, Pill, RunBy, Mini } from "../components/ui";
 import { useAuth } from "../lib/auth";
 import { useEffect } from "react";
-import { type CampaignRow, type Destination, count, cpl, delivery, PERIODS, fetchDestinations, guessRunBy, period, rm, saveTag, syncNow, useCampaignsIn, useMonthTotals, when } from "../lib/live";
+import { type CampaignRow, type Destination, count, cpl, delivery, PERIODS, fetchDestinations, guessRunBy, period, rm, saveTag, syncNow, useCampaignsIn, useMonthTotals, when, spanText } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -145,7 +145,7 @@ export default function Campaigns() {
 
       <Card className="!p-2">
         <div className="px-3 pt-2 text-[13px] text-muted">
-          {loading ? "Loading…" : `${range.from === range.to ? range.from : `${range.from} to ${range.to}`}. ${count(rows.length)} campaign${rows.length === 1 ? "" : "s"}. Spend ${rm(sum.spend)}, leads ${count(sum.leads)}${sum.leads ? `, CPL ${cpl(sum.spend, sum.leads)}` : ""}.`}
+          {loading ? "Loading…" : `${spanText(range)}. ${count(rows.length)} campaign${rows.length === 1 ? "" : "s"}. Spend ${rm(sum.spend)}, leads ${count(sum.leads)}${sum.leads ? `, CPL ${cpl(sum.spend, sum.leads)}` : ""}.`}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse" style={{ minWidth: 1020 }}>
@@ -167,6 +167,10 @@ export default function Campaigns() {
                   <tr key={c.id}>
                     <td className={cell}>
                       <B>{c.name}</B>
+                      <Mini>
+                        {c.spend ? rm(c.spend) : "No spend"}
+                        {c.leads ? ` · ${count(c.leads)} leads · ${cpl(c.spend, c.leads)} each` : c.spend ? " · no leads" : ""}
+                      </Mini>
                     </td>
                     <td className={cell}>
                       {editing ? (

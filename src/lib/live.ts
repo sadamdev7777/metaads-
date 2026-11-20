@@ -363,3 +363,10 @@ export const useDepositTotals = () => useRpc<DepositTotals | null>("deposit_tota
 export type DashPeriod = { from: string; to: string; spend: number; leads: number; pax: number; bookings: number; prev: { from: string; to: string; spend: number | null; leads: number | null; pax: number | null } };
 export type DashTotals = { periods: Record<"today" | "yesterday" | "week" | "month", DashPeriod>; target: number | null; limit: number | null; monthly_budget: number | null; days_in_month: number; day_of_month: number; deposits_from: string | null; deposits_loaded: string | null };
 export const useDashTotals = () => useRpc<DashTotals | null>("dashboard_totals", {}, null);
+
+/** A period in plain words: "21 Nov" or "15 to 21 Nov". */
+export function spanText(p: { from: string; to: string }) {
+  const f = (d: string, withMonth = true) => new Date(`${d}T12:00:00+08:00`).toLocaleDateString("en-MY", withMonth ? { day: "numeric", month: "short", timeZone: "Asia/Kuala_Lumpur" } : { day: "numeric", timeZone: "Asia/Kuala_Lumpur" });
+  if (p.from === p.to) return f(p.from);
+  return `${f(p.from, p.from.slice(0, 7) !== p.to.slice(0, 7))} to ${f(p.to)}`;
+}

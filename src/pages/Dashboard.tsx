@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Avatar, B, Card, PageHead, Pill, T } from "../components/ui";
 import { STAFF } from "../lib/data";
-import { type DashPeriod, type Report, count, cpl, delivery, fetchLatestReport, paxLabel, paxTone, pendingCount, perPax, rm, rm2, useCampaigns, useCountryCost, useDashTotals, useMonthTotals, when } from "../lib/live";
+import { type DashPeriod, type Report, count, cpl, delivery, fetchLatestReport, paxLabel, paxTone, pendingCount, perPax, rm, rm2, spanText, useCampaigns, useCountryCost, useDashTotals, useMonthTotals, when } from "../lib/live";
 import { supabase } from "../lib/supabase";
 
 const linkBtn = "flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-3.5 text-sm font-semibold text-ink no-underline";
@@ -29,7 +29,7 @@ function Delta({ value, good, versus }: { value: number | null; good: "up" | "do
   return (
     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-muted">
       <span className={`rounded-full px-2 py-0.5 font-semibold ${tone}`}>
-        {flat ? "No change" : `${value > 0 ? "▲" : "▼"} ${pct(value)}`}
+        {flat ? "No change" : `${value > 0 ? "▲" : "▼"} ${pct(Math.abs(value))}`}
       </span>
       <span>vs {versus}</span>
     </div>
@@ -184,7 +184,7 @@ export default function Dashboard() {
         <div className="text-[12px] leading-relaxed text-muted">
           Paid deposit is bookings with status paid deposit in TravelCRM, by booking date{dash?.deposits_loaded ? `, last loaded ${when(dash.deposits_loaded)}` : ""}. It is
           loaded once a night, so today fills in tomorrow. Cost per pax here is all ad spend divided by all paid-deposit pax.
-          {dash?.deposits_from ? ` Deposit records start ${dash.deposits_from}.` : ""}
+          {dash?.deposits_from ? ` Deposit records start ${spanText({ from: dash.deposits_from, to: dash.deposits_from })}.` : ""}
         </div>
       </section>
 

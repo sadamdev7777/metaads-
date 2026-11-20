@@ -350,7 +350,7 @@ function Destinations() {
                   value=""
                   disabled={savingDep === r.departure_id}
                   onChange={(e) => void setDep(r.departure_id, e.target.value)}
-                  className="min-h-[36px] max-w-[220px] rounded-lg border border-line bg-white px-2 text-sm"
+                  className="min-h-[40px] w-full max-w-[220px] rounded-lg border border-line bg-white px-2 text-sm"
                 >
                   <option value="">{savingDep === r.departure_id ? "Saving…" : "Choose…"}</option>
                   {list.map((d) => (

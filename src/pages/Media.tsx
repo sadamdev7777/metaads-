@@ -120,10 +120,10 @@ export default function MediaPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {shown.map((m) => (
           <Card key={m.id} className="!p-3">
-            <div className="flex aspect-[4/5] items-center justify-center overflow-hidden rounded-lg bg-[#ECEFEC]">
+            <div className="flex aspect-square items-center sm:aspect-[4/5] justify-center overflow-hidden rounded-lg bg-[#ECEFEC]">
               {m.url ? (
                 m.format === "MP4" ? (
                   <video src={m.url} controls preload="metadata" className="h-full w-full object-contain" />

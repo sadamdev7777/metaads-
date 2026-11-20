@@ -95,43 +95,72 @@ export function Btn({
 }
 
 /** Table that scrolls sideways inside its own box on narrow screens. */
+/**
+ * A table on wide screens. On a phone each row becomes a small card (first cell as the title, the rest as
+ * label and value), so no figure is hidden off to the right.
+ */
 export function T({ heads, rows, right = [], minW = 640 }: { heads: ReactNode[]; rows: ReactNode[][]; right?: number[]; minW?: number }) {
+  const empty = (c: ReactNode) => c === "" || c === null || c === undefined || c === false;
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse" style={{ minWidth: minW }}>
-        <thead>
-          <tr>
-            {heads.map((h, i) => (
-              <th
-                key={i}
-                className={`whitespace-nowrap border-b border-line px-3 py-2.5 text-xs font-semibold text-muted ${right.includes(i) ? "text-right" : "text-left"}`}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, ri) => (
-            <tr key={ri}>
-              {r.map((c, i) => (
-                <td key={i} className={`border-b border-line px-3 py-3 align-top text-sm ${right.includes(i) ? "text-right" : "text-left"}`}>
-                  {c}
-                </td>
+    <>
+      <ul className="m-0 flex list-none flex-col divide-y divide-line p-0 sm:hidden">
+        {rows.map((r, ri) => (
+          <li key={ri} className="flex flex-col gap-1.5 px-2 py-3">
+            <div className="text-sm">{r[0]}</div>
+            <dl className="m-0 grid grid-cols-3 gap-x-3 gap-y-1.5">
+              {r.slice(1).map((c, i) =>
+                empty(c) ? null : empty(heads[i + 1]) ? (
+                  <div key={i} className="col-span-3 pt-0.5">{c}</div>
+                ) : (
+                  <div key={i} className="min-w-0">
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{heads[i + 1]}</dt>
+                    <dd className="m-0 break-words text-sm">{c}</dd>
+                  </div>
+                ),
+              )}
+            </dl>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full border-collapse" style={{ minWidth: minW }}>
+          <thead>
+            <tr>
+              {heads.map((h, i) => (
+                <th
+                  key={i}
+                  className={`whitespace-nowrap border-b border-line px-3 py-2.5 text-xs font-semibold text-muted ${right.includes(i) ? "text-right" : "text-left"}`}
+                >
+                  {h}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => (
+              <tr key={ri}>
+                {r.map((c, i) => (
+                  <td key={i} className={`border-b border-line px-3 py-3 align-top text-sm ${right.includes(i) ? "text-right" : "text-left"}`}>
+                    {c}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
+/** A line of key figures shown under a row's name on a phone, where the other columns are off-screen. */
+export const Mini = ({ children }: { children: ReactNode }) => <div className="mt-1 min-w-[210px] text-[12px] font-normal leading-snug text-muted sm:hidden">{children}</div>;
+
 export function Stat({ label, value, sub, extra }: { label: string; value: ReactNode; sub?: ReactNode; extra?: ReactNode }) {
   return (
-    <div className="flex min-w-[180px] flex-1 flex-col gap-1.5 rounded-xl border border-line bg-white p-5">
+    <div className="flex min-w-0 flex-1 basis-[calc(50%-0.5rem)] flex-col gap-1 rounded-xl border border-line bg-white p-4 sm:min-w-[180px] sm:basis-0 sm:gap-1.5 sm:p-5">
       <div className="text-[13px] font-semibold text-muted">{label}</div>
-      <div className="text-[28px] font-bold leading-tight">{value}</div>
+      <div className="text-[22px] font-bold leading-tight sm:text-[28px]">{value}</div>
       {sub && <div className="text-[13px] text-muted">{sub}</div>}
       {extra}
     </div>
@@ -224,19 +253,56 @@ export const AGENT_STATE: Record<AgentState, { dot: string; tone: Tone; label: s
   idle: { dot: "#8A938E", tone: "n", label: "Idle" },
 };
 
-/** Person avatar for an AI staff member, with a status dot that pulses while working. */
+/** What makes each AI staff member's face their own. Drawn here, not photos of real people. */
+const FACE: Record<AgentKey, { skin: string; cover: "hijab" | "hair"; coverColor: string; shirt: string; glasses?: boolean; beard?: boolean }> = {
+  data: { skin: "#E9B98F", cover: "hijab", coverColor: "#1B6E8A", shirt: "#12506A", glasses: true },
+  ana: { skin: "#C98F62", cover: "hair", coverColor: "#221A16", shirt: "#4B3591", glasses: true, beard: true },
+  ads: { skin: "#DDA67A", cover: "hair", coverColor: "#3A2A20", shirt: "#B5651D" },
+  plan: { skin: "#F0C4A0", cover: "hijab", coverColor: "#B4567A", shirt: "#7E3355" },
+};
+
+/** Face of an AI staff member, with a status dot that pulses while working. */
 export function Avatar({ who, state, size = 48 }: { who: AgentKey; state: AgentState; size?: number }) {
-  const [bg, fg] = AV[who];
+  const [bg] = AV[who];
+  const f = FACE[who];
   const d = Math.max(12, Math.round(size / 4));
-  const icon = Math.round(size * 0.56);
+  const line = "#2A1D16";
   return (
     <div className="relative flex-none" style={{ width: size, height: size }}>
-      <div className="flex items-center justify-center rounded-full" style={{ width: size, height: size, background: bg }}>
-        <svg aria-hidden="true" width={icon} height={icon} viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" />
-        </svg>
-      </div>
+      <svg aria-hidden="true" width={size} height={size} viewBox="0 0 48 48" className="block rounded-full">
+        <circle cx="24" cy="24" r="24" fill={bg} />
+        {/* shoulders */}
+        <path d="M6 50c0-10 8-15 18-15s18 5 18 15z" fill={f.shirt} />
+        {f.cover === "hijab" ? (
+          <>
+            {/* scarf wraps the head and drapes over the shoulders */}
+            <path d="M24 5c-9.5 0-15 7-15 16 0 8 2 13-1 21h32c-3-8-1-13-1-21 0-9-5.500-16-15-16z" fill={f.coverColor} />
+            <ellipse cx="24" cy="22.500" rx="9.200" ry="10.800" fill={f.skin} />
+            <path d="M14.500 19c2-6 6-8.500 9.500-8.500s7.500 2.500 9.500 8.500c-3-2.500-6-3.500-9.500-3.500s-6.500 1-9.500 3.500z" fill={f.coverColor} opacity="0.550" />
+          </>
+        ) : (
+          <>
+            <rect x="20.500" y="29" width="7" height="8" rx="2.500" fill={f.skin} />
+            <ellipse cx="24" cy="21.500" rx="10" ry="11.500" fill={f.skin} />
+            <ellipse cx="13.800" cy="22.500" rx="1.600" ry="2.600" fill={f.skin} />
+            <ellipse cx="34.200" cy="22.500" rx="1.600" ry="2.600" fill={f.skin} />
+            <path d="M13.500 20c-1-8 4-12.500 10.500-12.500s11.500 4.500 10.500 12.500c-1.500-4-3.500-6-6-6.500-3 1.500-9 1.500-11.500 0.500-1.500 1-2.700 3-3.500 6z" fill={f.coverColor} />
+            {f.beard && <path d="M14.800 24c0.500 7 4.200 10.500 9.200 10.500s8.700-3.500 9.200-10.500c-1.500 3.500-3 5-5 5.200-1.200-1.200-7.200-1.200-8.400 0-2-0.200-3.500-1.700-5-5.200z" fill={f.coverColor} opacity="0.900" />}
+          </>
+        )}
+        {/* eyes, brows and a small smile */}
+        <circle cx="20" cy="22.500" r="1.250" fill={line} />
+        <circle cx="28" cy="22.500" r="1.250" fill={line} />
+        <path d="M17.800 19.600q2.200-1.300 4.400 0M25.800 19.600q2.200-1.300 4.400 0" stroke={line} strokeWidth="0.900" strokeLinecap="round" fill="none" />
+        <path d="M20.500 27.600q3.500 2.800 7 0" stroke={f.beard ? "#F4E3D6" : "#8A3B2E"} strokeWidth="1.200" strokeLinecap="round" fill="none" />
+        {f.glasses && (
+          <g stroke={line} strokeWidth="0.900" fill="none">
+            <rect x="16.300" y="20" width="7" height="5.200" rx="2.200" />
+            <rect x="24.700" y="20" width="7" height="5.200" rx="2.200" />
+            <path d="M23.300 22h1.400" />
+          </g>
+        )}
+      </svg>
       <span
         role="img"
         aria-label={AGENT_STATE[state].label}

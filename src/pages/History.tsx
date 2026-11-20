@@ -73,15 +73,15 @@ export default function History() {
             </div>
             <ul className="m-0 mt-2 list-none divide-y divide-line p-0">
               {items.map((i, n) => (
-                <li key={`${i.at}-${n}`} className="grid grid-cols-[52px_1fr] gap-x-3 py-2 text-sm">
-                  <span className="pt-0.5 text-[13px] tabular-nums text-muted">{time(i.at)}</span>
+                <li key={`${i.at}-${n}`} className="grid grid-cols-[68px_1fr] gap-x-3 py-2 text-sm">
+                  <span className="whitespace-nowrap pt-0.5 text-[13px] tabular-nums text-muted">{time(i.at)}</span>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="font-semibold">{i.who}</span>
                       <Pill tone={i.ok ? KIND[i.kind].tone : "r"}>{i.ok ? KIND[i.kind].label : "Failed"}</Pill>
                     </div>
                     <div className="break-words">{i.title}</div>
-                    {i.detail && <div className="break-words text-[13px] text-muted">{i.detail}</div>}
+                    {i.detail && <div className="break-words text-[13px] text-muted">{i.detail.length >= 400 ? `${i.detail}…` : i.detail}</div>}
                   </div>
                 </li>
               ))}
