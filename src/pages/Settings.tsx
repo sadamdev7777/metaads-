@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, useParams } from "react-router-dom";
-import { Avatar, B, Bar, Btn, Card, Field, PageHead, Pill, SampleTag, Stat, T } from "../components/ui";
+import { Avatar, B, Bar, Btn, Card, Field, PageHead, Pill, Stat, T } from "../components/ui";
 import { fetchActivity, type ActivityRow } from "../lib/activity";
 import { useAuth } from "../lib/auth";
-import { BUDGET, LEAD_GAP, MODE_ROWS } from "../lib/data";
+import { MODE_ROWS } from "../lib/data";
+import { rm, useCampaigns, useMonthTotals, when } from "../lib/live";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 
@@ -197,41 +198,34 @@ function Rules() {
 /* ---------------- Budget ---------------- */
 
 function Budget() {
+  const { data: t } = useMonthTotals();
+  const now = new Date();
+  const day = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const month = useCampaigns(day);
+  const BUDGET_RM = 100000;
+  const spent = t?.spend ?? 0;
+  const projected = day > 0 ? (spent / day) * daysInMonth : 0;
+  const pct = Math.round((spent / BUDGET_RM) * 100);
+  const groups = new Map<string, number>();
+  for (const c of month.data) if (c.spend > 0) groups.set(c.country ?? "Not tagged", (groups.get(c.country ?? "Not tagged") ?? 0) + c.spend);
+  const rows = Array.from(groups.entries()).sort((x, y) => y[1] - x[1]);
   return (
     <>
-      <div className="flex justify-end">
-        <SampleTag />
-      </div>
       <div className="flex flex-wrap gap-4">
-        <Stat label="Budget this month" value="RM100,000" sub="November" />
-        <Stat label="Spent so far" value="RM61,200" sub="day 19 of 30" />
-        <Stat label="Projected month end" value="RM96,600" sub="at the current daily rate" />
+        <Stat label="Budget this month" value={rm(BUDGET_RM)} sub={now.toLocaleDateString("en-MY", { month: "long" })} />
+        <Stat label="Spent so far" value={t ? rm(spent) : "…"} sub={`day ${day} of ${daysInMonth}`} />
+        <Stat label="Projected month end" value={t ? rm(projected) : "…"} sub="at the average daily rate so far" />
       </div>
-      <Card
-        title="Monthly budget by country"
-        sub="Set how much each country may spend this month. Campaign Planner keeps new campaign budgets inside the plan, and Analyst warns when a country is heading over."
-      >
-        <T
-          minW={760}
-          right={[1, 2, 4]}
-          heads={["Country", "Planned", "Spent so far", "Of plan", "Projected month end", "Status"]}
-          rows={[
-            ...BUDGET.map((b) => [
-              <B>{b.country}</B>,
-              b.planned,
-              b.spent,
-              <div className="flex items-center gap-2">
-                <div className="w-28">
-                  <Bar pct={b.pct} label={`${b.pct} percent of plan spent`} />
-                </div>
-                {b.pct}%
-              </div>,
-              b.projected,
-              <Pill tone={b.tone}>{b.status}</Pill>,
-            ]),
-            [<B>Total</B>, <B>RM100,000</B>, <B>RM61,200</B>, "61%", <B>RM96,600</B>, <Pill tone="g">On plan</Pill>],
-          ]}
-        />
+      <Card title="Budget used">
+        <Bar pct={Math.min(pct, 100)} label={`${pct} percent of budget used`} />
+        <div className="text-sm">
+          {pct}% used, {Math.round((day / daysInMonth) * 100)}% of the month gone.
+        </div>
+      </Card>
+      <Card title="Spend this month by country" sub="From the country tag on each campaign. A plan for each country can be set once tagging is complete.">
+        <T minW={420} right={[1, 2]} heads={["Country", "Spent so far", "Share"]} rows={rows.map(([k, v]) => [<B>{k}</B>, rm(v), spent > 0 ? `${Math.round((v / spent) * 100)}%` : ""])} />
+        {!month.loading && rows.length === 0 && <div className="text-sm text-muted">No spend recorded this month yet.</div>}
       </Card>
     </>
   );
@@ -298,7 +292,7 @@ function Integrations() {
           {working} of {rows.length + 1} connections are working
         </div>
         <div className="text-[13px] text-muted">
-          This is the real status, not sample data. If a required connection fails, Auto mode stops and returns to Approval.
+          This is the real status. If a required connection fails, Auto mode stops and returns to Approval.
         </div>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
@@ -717,24 +711,29 @@ Content-Type: application/json
 /* ---------------- Data Health ---------------- */
 
 function DataHealth() {
-  const { untagged } = useStore();
+  const { data: t } = useMonthTotals();
+  const month = useCampaigns(30);
+  const [leads, setLeads] = useState<number | null>(null);
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.from("leads").select("id", { count: "exact", head: true }).then(({ count }) => setLeads(count ?? 0));
+  }, []);
+  const running = month.data.filter((c) => c.delivery_status === "ACTIVE" || c.spend > 0);
+  const untagged = running.filter((c) => !c.country);
+  const noRunBy = running.filter((c) => !c.run_by);
   return (
     <>
-      <div className="flex justify-end">
-        <SampleTag />
-      </div>
       <div className="flex flex-wrap gap-4">
-        <Stat label="Lead gap, Meta vs website" value="3.9%" sub="Meta 9,720, website 9,340" />
-        <Stat label="Deposits matched to an ad lead" value="85%" sub="812 of 955 pax in TravelCRM, by phone number" />
-        <Stat label="Not matched" value="143 pax" sub="Other channels, or a different phone number. Not counted in cost per pax." />
-        <Stat label="Campaigns not tagged" value={String(untagged.length)} sub="Spend not counted in any product" />
+        <Stat label="Last sync with Meta" value={when(t?.last_good_sync)} sub={t?.last_sync?.ok === false ? `Latest attempt failed: ${t.last_sync.error}` : "Runs every hour"} />
+        <Stat label="Campaigns not tagged" value={String(untagged.length)} sub={`of ${running.length} active or with spend in 30 days`} />
+        <Stat label="No Run by" value={String(noRunBy.length)} sub="cannot be compared by staff" />
+        <Stat label="Website form leads received" value={leads === null ? "…" : String(leads)} sub={leads ? "through the webhook" : "the website is not sending leads yet"} />
       </div>
-      <Card title="Lead gap by country">
-        <T
-          right={[1, 2, 3, 4]}
-          heads={["Country", "Meta leads", "Website leads", "Difference", "Gap", "Status"]}
-          rows={LEAD_GAP.map((g) => [<B>{g.country}</B>, g.meta, g.web, g.diff, g.gap, g.ok ? <Pill tone="g">Within limit</Pill> : <Pill tone="a">Check</Pill>])}
-        />
+      <Card title="Checks that need TravelCRM">
+        <div className="text-sm">
+          Lead gap between Meta and the website, and how many deposits match an ad lead by phone number, are shown here once the website form and
+          TravelCRM are both connected.
+        </div>
       </Card>
     </>
   );

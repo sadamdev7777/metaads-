@@ -1,20 +1,92 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { B, Btn, Card, CostStatus, PageHead, Pill, RunBy, SampleTag, Sel, T } from "../components/ui";
-import { CAMPAIGNS } from "../lib/data";
+import { B, Btn, Card, PageHead, Pill, RunBy } from "../components/ui";
+import { useAuth } from "../lib/auth";
+import { COUNTRIES, type CampaignRow, count, cpl, delivery, guessCountry, rm, saveTag, syncNow, useCampaigns, useMonthTotals, when } from "../lib/live";
 import { useStore } from "../lib/store";
 
-export default function Campaigns() {
-  const { untagged, tag, paused, togglePause, act } = useStore();
-  const spend = untagged.reduce((n, u) => n + Number(u.spend.replace(/[^\d]/g, "")), 0);
+const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const PAGE = 50;
 
+function Pick({ id, label, value, onChange, options }: { id: string; label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div className="flex min-w-[150px] flex-1 flex-col gap-1.5">
+      <label htmlFor={id} className="text-[13px] font-semibold">
+        {label}
+      </label>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={INPUT}>
+        {options.map((o) => (
+          <option key={o}>{o}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+export default function Campaigns() {
+  const { act } = useStore();
+  const { user } = useAuth();
+  const [days, setDays] = useState("Last 30 days");
+  const nDays = days === "Last 7 days" ? 7 : days === "This and last month" ? 60 : 30;
+  const { data, loading, error, reload, setData } = useCampaigns(nDays);
+  const totals = useMonthTotals();
+  const [country, setCountry] = useState("All countries");
+  const [runBy, setRunBy] = useState("Everyone");
+  const [show, setShow] = useState("Active or with spend");
+  const [q, setQ] = useState("");
+  const [shown, setShown] = useState(PAGE);
+  const [edit, setEdit] = useState<{ id: string; country: string; runBy: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const people = useMemo(() => Array.from(new Set(data.map((c) => c.run_by).filter(Boolean) as string[])).sort(), [data]);
+  const rows = useMemo(() => {
+    const text = q.trim().toLowerCase();
+    return data.filter((c) => {
+      if (show === "Active or with spend" && !(c.delivery_status === "ACTIVE" || c.spend > 0)) return false;
+      if (show === "Active only" && c.delivery_status !== "ACTIVE") return false;
+      if (show === "Not tagged" && c.country) return false;
+      if (country !== "All countries" && (country === "Not tagged" ? Boolean(c.country) : c.country !== country)) return false;
+      if (runBy !== "Everyone" && c.run_by !== runBy) return false;
+      return !text || c.name.toLowerCase().includes(text);
+    });
+  }, [data, show, country, runBy, q]);
+
+  const relevant = data.filter((c) => c.delivery_status === "ACTIVE" || c.spend > 0);
+  const untagged = relevant.filter((c) => !c.country);
+  const untaggedSpend = untagged.reduce((n, c) => n + c.spend, 0);
+  const sum = rows.reduce((t, c) => ({ spend: t.spend + c.spend, leads: t.leads + c.leads }), { spend: 0, leads: 0 });
+
+  async function save(c: CampaignRow) {
+    if (!edit) return;
+    setBusy(true);
+    const nextCountry = edit.country || null;
+    const nextRunBy = edit.runBy.trim() || null;
+    const err = await saveTag(c.id, nextCountry, nextRunBy, user?.email ?? "");
+    setBusy(false);
+    if (err) return act(`Tagging ${c.name} failed`, "Campaigns", err);
+    setData((list) => list.map((x) => (x.id === c.id ? { ...x, country: nextCountry, run_by: nextRunBy } : x)));
+    setEdit(null);
+    act(`Tagged campaign ${c.name}: country ${nextCountry ?? "none"}, run by ${nextRunBy ?? "none"}`, "Campaigns", "Tag saved.");
+  }
+  async function sync() {
+    setBusy(true);
+    const r = await syncNow();
+    setBusy(false);
+    act(r.ok ? "Synced with Meta" : "Sync with Meta failed", "Campaigns", r.ok ? "Synced. Figures are up to date." : r.error ?? "Sync failed.");
+    await Promise.all([reload(), totals.reload()]);
+  }
+
+  const last = totals.data?.last_good_sync;
   return (
     <>
       <PageHead
         title="Campaigns"
-        sub="Step 3. One campaign is for one product. Run it by hand or let AI draft it."
+        sub={`Step 3. Live from Meta Ads. Last sync ${when(last)}. The system reads only: nothing here changes an ad.`}
         right={
-          <div className="flex items-center gap-3">
-            <SampleTag />
+          <div className="flex items-center gap-2">
+            <Btn kind="s" disabled={busy} onClick={() => void sync()}>
+              {busy ? "Working…" : "Sync now"}
+            </Btn>
             <Link to="/campaigns/new" className="flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
               New campaign
             </Link>
@@ -22,106 +94,140 @@ export default function Campaigns() {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-[#FBE6E3] px-5 py-4">
-        <div className="min-w-0 flex-[1_1_360px]">
-          <div className="text-sm font-bold text-[#A3231B]">1 ad rejected by Meta</div>
-          <div className="text-sm">Turkiye 12/10 - AI › Broad MP4 › MP4 1. Reason from Meta: [Meta's reason is shown here]</div>
-        </div>
-        <div className="flex gap-2">
-          <Btn onClick={() => act("Opened Replace media for Turkiye 12/10 - AI › MP4 1", "Campaigns", "Replacing media arrives with Phase 3.")}>Replace media</Btn>
-          <Btn kind="s" onClick={() => act("Opened Turkiye 12/10 - AI in Ads Manager", "Campaigns", "The Ads Manager link arrives with Phase 1.")}>
-            Open in Ads Manager
+      {error && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]">Could not load campaigns: {error}</div>}
+
+      {untagged.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-[#FBEFD5] px-5 py-4">
+          <div className="min-w-0 flex-[1_1_360px]">
+            <div className="text-sm font-bold text-[#5C3900]">
+              {untagged.length} running campaign{untagged.length === 1 ? " has" : "s have"} no country tag
+            </div>
+            <div className="text-sm">
+              {rm(untaggedSpend)} of spend in this period is not counted under any country. Tag the country and who ran it. A suggestion is shown when the
+              name has a place in it.
+            </div>
+          </div>
+          <Btn
+            kind="s"
+            onClick={() => {
+              setShow("Not tagged");
+              setShown(PAGE);
+            }}
+          >
+            Show them
           </Btn>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-4">
-        <Sel id="cc" label="Country" options={["All countries", "Korea", "Malaysia", "Japan", "Turkiye", "Vietnam"]} />
-        <Sel id="cr" label="Run by" options={["Everyone", "Staff A", "Staff B", "AI"]} />
-        <Sel id="cs" label="Delivery" options={["All", "Delivering", "Learning", "Has issues", "Paused", "Draft"]} />
-        <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+        <Pick id="cd" label="Period" value={days} onChange={setDays} options={["Last 7 days", "Last 30 days", "This and last month"]} />
+        <Pick id="cs" label="Show" value={show} onChange={(v) => { setShow(v); setShown(PAGE); }} options={["Active or with spend", "Active only", "Not tagged", "Everything"]} />
+        <Pick id="cc" label="Country" value={country} onChange={(v) => { setCountry(v); setShown(PAGE); }} options={["All countries", ...COUNTRIES, "Not tagged"]} />
+        <Pick id="cr" label="Run by" value={runBy} onChange={(v) => { setRunBy(v); setShown(PAGE); }} options={["Everyone", ...people]} />
+        <div className="flex min-w-[200px] flex-[2_1_220px] flex-col gap-1.5">
           <label htmlFor="cq" className="text-[13px] font-semibold">
             Search name
           </label>
-          <input id="cq" type="search" placeholder="e.g. Korea" className="min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px]" />
+          <input id="cq" type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(PAGE); }} placeholder="e.g. Korea" className={`${INPUT} w-full`} />
         </div>
       </div>
 
       <Card className="!p-2">
-        <T
-          minW={1040}
-          right={[5, 6]}
-          heads={["Campaign", "Product", "Run by", "Source", "Delivery", "Budget a day", "Cost per pax", "Status", ""]}
-          rows={CAMPAIGNS.map((c) => {
-            const isPaused = paused.includes(c.id);
-            return [
-              <B>{c.name}</B>,
-              c.product,
-              <RunBy k={c.runBy} />,
-              <Pill tone={c.system ? "g" : "n"}>{c.system ? "Launched here" : "Loaded from Meta"}</Pill>,
-              isPaused ? <Pill>Paused</Pill> : <Pill tone={c.delivery.tone}>{c.delivery.text}</Pill>,
-              c.budget,
-              c.cpp ? <B>{c.cpp}</B> : "",
-              <CostStatus st={c.st} />,
-              c.draft ? (
-                <Link to="/campaigns/new" className="flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-2.5 text-[13px] font-semibold text-ink no-underline">
-                  Open draft
-                </Link>
-              ) : (
-                <span className="inline-flex gap-1.5">
-                  <Btn small kind="s" onClick={() => togglePause(c.id, c.name)}>
-                    {isPaused ? "Resume" : "Pause"}
-                  </Btn>
-                  <Btn small kind="s" onClick={() => act(`Opened Edit budget for ${c.name}`, "Campaigns", "Budget editing arrives with Phase 2.")}>
-                    Edit budget
-                  </Btn>
-                </span>
-              ),
-            ];
-          })}
-        />
-      </Card>
-
-      <Card
-        title="Found in Meta, not in the system"
-        right={untagged.length ? <Pill tone="a">{`${untagged.length} campaign${untagged.length === 1 ? "" : "s"}, RM${spend.toLocaleString()} not counted yet`}</Pill> : <Pill tone="g">All tagged</Pill>}
-        sub="Data Keeper checks Meta every hour. A campaign made in Ads Manager shows up here with a notification. Tag it with its product and who ran it. Until it is tagged, AI staff only watch it. A campaign with no UTM cannot be matched to leads until one is added."
-      >
-        {untagged.length > 0 && (
-          <T
-            minW={860}
-            right={[2]}
-            heads={["Campaign", "Found", "Spend", "Suggested tag", "UTM", ""]}
-            rows={untagged.map((u) => [
-              <B>{u.name}</B>,
-              u.found,
-              u.spend,
-              u.product ? (
-                <span>
-                  Product: <B>{u.product}</B>
-                  <br />
-                  Run by: <B>{u.runBy}</B>
-                </span>
-              ) : (
-                u.note
-              ),
-              u.utm ? <Pill tone="g">UTM found</Pill> : <Pill tone="r">No UTM</Pill>,
-              u.product ? (
-                <Btn small onClick={() => tag(u)}>
-                  Confirm
-                </Btn>
-              ) : (
-                <Btn small kind="s" onClick={() => act(`Opened tagging for ${u.name}`, "Campaigns", "Choosing a product by hand arrives with Phase 1.")}>
-                  {u.action}
-                </Btn>
-              ),
-            ])}
-          />
+        <div className="px-3 pt-2 text-[13px] text-muted">
+          {loading ? "Loading…" : `${count(rows.length)} campaign${rows.length === 1 ? "" : "s"}. Spend ${rm(sum.spend)}, leads ${count(sum.leads)}${sum.leads ? `, CPL ${cpl(sum.spend, sum.leads)}` : ""}.`}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse" style={{ minWidth: 1020 }}>
+            <thead>
+              <tr>
+                {["Campaign", "Country", "Run by", "Delivery", "Budget a day", "Spend", "Leads (Meta)", "CPL", ""].map((h, i) => (
+                  <th key={i} className={`whitespace-nowrap border-b border-line px-3 py-2.5 text-xs font-semibold text-muted ${i >= 4 && i <= 7 ? "text-right" : "text-left"}`}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, shown).map((c) => {
+                const d = delivery(c.delivery_status);
+                const guess = c.country ? null : guessCountry(c.name);
+                const editing = edit?.id === c.id;
+                const cell = "border-b border-line px-3 py-3 align-top text-sm";
+                return (
+                  <tr key={c.id}>
+                    <td className={cell}>
+                      <B>{c.name}</B>
+                    </td>
+                    <td className={cell}>
+                      {editing ? (
+                        <select aria-label="Country" value={edit.country} onChange={(e) => setEdit({ ...edit, country: e.target.value })} className={INPUT}>
+                          <option value="">No country</option>
+                          {COUNTRIES.map((o) => (
+                            <option key={o}>{o}</option>
+                          ))}
+                        </select>
+                      ) : c.country ? (
+                        <Pill tone="t">{c.country}</Pill>
+                      ) : (
+                        <Pill tone="a">{guess ? `Suggested: ${guess}` : "Not tagged"}</Pill>
+                      )}
+                    </td>
+                    <td className={cell}>
+                      {editing ? (
+                        <input aria-label="Run by" list="people" value={edit.runBy} onChange={(e) => setEdit({ ...edit, runBy: e.target.value })} placeholder="Staff name" className={`${INPUT} w-[140px]`} />
+                      ) : c.run_by ? (
+                        <RunBy k={c.run_by} />
+                      ) : (
+                        ""
+                      )}
+                    </td>
+                    <td className={cell}>
+                      <Pill tone={d.tone}>{d.text}</Pill>
+                    </td>
+                    <td className={`${cell} text-right`}>{c.daily_budget ? rm(c.daily_budget) : ""}</td>
+                    <td className={`${cell} text-right`}>{c.spend ? rm(c.spend) : ""}</td>
+                    <td className={`${cell} text-right`}>{c.leads ? count(c.leads) : ""}</td>
+                    <td className={`${cell} text-right`}>{cpl(c.spend, c.leads)}</td>
+                    <td className={`${cell} whitespace-nowrap`}>
+                      {editing ? (
+                        <span className="inline-flex gap-1.5">
+                          <Btn small disabled={busy} onClick={() => void save(c)}>
+                            Save
+                          </Btn>
+                          <Btn small kind="s" disabled={busy} onClick={() => setEdit(null)}>
+                            Cancel
+                          </Btn>
+                        </span>
+                      ) : (
+                        <Btn small kind={c.country ? "s" : "p"} onClick={() => setEdit({ id: c.id, country: c.country ?? guess ?? "", runBy: c.run_by ?? "" })}>
+                          {c.country ? "Edit tag" : "Tag"}
+                        </Btn>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <datalist id="people">
+            {people.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
+        </div>
+        {!loading && rows.length === 0 && <div className="px-3 py-6 text-sm text-muted">No campaign matches these filters.</div>}
+        {rows.length > shown && (
+          <div className="p-3">
+            <Btn kind="s" onClick={() => setShown((n) => n + PAGE)}>
+              Show {Math.min(PAGE, rows.length - shown)} more
+            </Btn>
+          </div>
         )}
       </Card>
 
       <p className="m-0 text-[13px] text-muted">
-        Changes made in Ads Manager, such as a new budget or a pause, are picked up the same way and written to the log as changed outside the system.
+        Leads are the leads Meta counts. Deposits and cost per pax appear once TravelCRM is connected. Tags you save are kept when the next sync runs.
+        Meta is checked every hour.
       </p>
     </>
   );

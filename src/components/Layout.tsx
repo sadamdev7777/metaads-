@@ -16,7 +16,8 @@ const NAV: { to: string; label: string; step?: string }[] = [
 
 export default function Layout() {
   const { user, demo, signOut } = useAuth();
-  const { approvals, toast } = useStore();
+  const { toast } = useStore();
+  const approvals: unknown[] = [];
   const [open, setOpen] = useState(false);
   const loc = useLocation();
 
