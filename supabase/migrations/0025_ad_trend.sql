@@ -1,0 +1,2 @@
+-- ad_trend(p_limit): top ads in three windows (last 3 days, days 4 to 7, days 8 to 14) as
+-- [spend, leads, impressions, clicks]. Applied on 2026-11-21 as "ad_trend" (full definition there).

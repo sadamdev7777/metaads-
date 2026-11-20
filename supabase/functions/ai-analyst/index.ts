@@ -21,11 +21,13 @@ How MTB works:
 - One campaign is one tour product (for example "Seoul Korea"). Campaign names usually end with the staff member who runs it.
 - Ad set and ad names describe the creative: PNG is a still image, MP4 is a video, H1/H2 are hooks or versions, and a person's name in an ad set is the talent in the video.
 - The real goal is cost per pax deposit: target RM50, hard limit RM80. Budget is about RM100,000 a month.
-- Deposits come from TravelCRM by COUNTRY only ("deposits_by_country"). They are not matched to individual campaigns or ads. So: judge a country against RM50 and RM80 using spend divided by pax_direct, and inside a country judge campaigns, ad sets and ads by cost per lead. Never state a cost per pax for a single campaign, ad set or ad.
-- The country figure is an estimate. pax_direct leaves out bookings that look like agent or staff entries (pax_shared), but still includes repeat customers and other channels, so the true cost from ads is higher than it reads. If "deposits_first_date" is later than the start of the period, pax is undercounted and cost reads too high: say so and do not judge on it. Spend under "Not tagged" belongs to campaigns nobody has given a country yet: it cannot be judged, and tagging them is worth proposing.
+- Deposits come from TravelCRM and are matched to a DESTINATION (for example "China - Yunnan"), not to a single campaign or ad. "deposits_by_destination" has spend, leads and paid-deposit pax per destination for the last 30 and the last 7 days; "deposits_by_country" adds them up by country. So: judge a destination against RM50 and RM80 using spend divided by pax, and inside a destination judge campaigns, ad sets and ads by cost per lead. Never state a cost per pax for a single campaign, ad set or ad.
+- These figures are estimates. Pax includes repeat customers and other channels, so the true cost from ads is higher than it reads. If "deposits_first_date" is later than the start of the period, pax is undercounted and cost reads too high: say so and lean on the 7-day figures and on comparisons between destinations, which the undercount hits equally. Rows with no destination ("Unknown", or matched false) are deposits whose package is not known yet: they cannot be judged, and if they are large every destination's true cost is lower than shown.
+- "seats_by_destination" shows coming departures with seats left. The list is partial (only departures that already have a booking), so missing means unknown, not zero. Do not propose more money for a destination whose coming departures are nearly full; favour one with empty seats and a departure 3 to 10 weeks away.
+- "ad_trend" gives the top ads in three windows as [spend, leads, impressions, clicks]: last_3_days, days_4_to_7 and days_8_to_14 (today is left out). Use it to tell an ad that is tiring (cost per lead rising and click rate falling window after window) from one that was weak from the start, and to spot an ad that is improving. Name the trend with the numbers.
 
 Your job each night:
-1. Study the figures. Find what is working and what is wasting money, at campaign, ad set and ad level. Compare creatives inside the same campaign (PNG against MP4, one hook against another, one talent against another).
+1. Study the figures. Find what is working and what is wasting money, at destination, campaign, ad set and ad level. Say which destinations earn their spend and which do not. Compare creatives inside the same campaign (PNG against MP4, one hook against another, one talent against another).
 2. Review your earlier proposals against the figures now. Say honestly whether you were right, wrong, or it is too early to tell.
 3. Write lessons: short, specific, reusable statements about what works for MTB's ads, each with its evidence. Only write a lesson the data supports. A lesson already in your notebook should not be repeated; if new data contradicts one, say so in the review.
 4. Propose at most 8 actions for tomorrow, the most valuable first. Staff approve or reject each one; nothing is changed automatically.
@@ -188,24 +190,47 @@ Deno.serve(async (req: Request) => {
   const model = cfg.agents?.analyst || cfg.model || pickModel(cfg.models ?? [], "analyst");
   if (!model) return json({ ok: false, error: "No model chosen. Press Test connection in Settings, Integrations." });
 
-  const [c30, c7, a30, a7, lessons, past, rules, dep] = await Promise.all([
+  const day = (back: number) => new Date(Date.now() + 8 * 3600000 - back * 86400000).toISOString().slice(0, 10);
+  const [c30, c7, a30, a7, lessons, past, rules, dep, d30, d7, trend, seatRows, destRows] = await Promise.all([
     admin.rpc("campaign_overview", { p_days: 30 }),
     admin.rpc("campaign_overview", { p_days: 7 }),
     admin.rpc("ad_overview", { p_days: 30, p_limit: 150 }),
-    admin.rpc("ad_overview", { p_days: 7, p_limit: 120 }),
+    admin.rpc("ad_overview", { p_days: 7, p_limit: 80 }),
     admin.from("ai_learnings").select("lesson, evidence, confidence, created_at").eq("is_active", true).order("id", { ascending: false }).limit(60),
     admin.from("proposals").select("created_at, action_type, target, reason, numbers, expected, status").eq("is_sample", false).order("created_at", { ascending: false }).limit(30),
     admin.from("rules").select("*").limit(1).maybeSingle(),
     admin.rpc("country_cost", { p_days: 30 }),
+    admin.rpc("destination_cost_range", { p_from: day(29), p_to: day(0) }),
+    admin.rpc("destination_cost_range", { p_from: day(6), p_to: day(0) }),
+    admin.rpc("ad_trend", { p_limit: 60 }),
+    admin.from("crm_departures").select("destination_id, departure_date, seats_available").not("package_name", "is", null).gte("departure_date", day(0)).order("departure_date").limit(1000),
+    admin.from("destinations").select("id, name"),
   ]);
+  const destName = new Map(((destRows.data ?? []) as Row[]).map((d) => [String(d.id), String(d.name)]));
+  const seats: Record<string, { departures: number; seats_left: number; nearly_full: number; seats_unknown: number; next_dates: string[] }> = {};
+  for (const d of (seatRows.data ?? []) as Row[]) {
+    const name = destName.get(String(d.destination_id)) ?? "No destination";
+    const st = (seats[name] ??= { departures: 0, seats_left: 0, nearly_full: 0, seats_unknown: 0, next_dates: [] });
+    st.departures++;
+    if (d.seats_available == null) st.seats_unknown++;
+    else {
+      st.seats_left += Number(d.seats_available);
+      if (Number(d.seats_available) <= 5) st.nearly_full++;
+    }
+    if (st.next_dates.length < 4) st.next_dates.push(String(d.departure_date));
+  }
+  const dKeys = ["destination", "country", "matched", "spend", "leads", "campaigns", "bookings", "pax"];
   const withSpend = (rows: unknown) => (Array.isArray(rows) ? rows : []).filter((r) => Number((r as Row).spend) > 0 || (r as Row).delivery_status === "ACTIVE");
   const cKeep = ["id", "name", "country", "run_by", "delivery_status", "daily_budget", "spend", "leads", "impressions", "clicks"];
   const aKeep = ["id", "campaign", "ad_set", "ad", "status", "spend", "leads", "impressions", "clicks", "days_with_spend"];
   const brief = {
     today_malaysia: new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10),
-    note: "Money is in Malaysian ringgit. Leads are the leads Meta counts. Deposits are by country for the last 30 days.",
+    note: "Money is in Malaysian ringgit. Leads are the leads Meta counts. Pax is paid-deposit pax from TravelCRM, by destination.",
     deposits_first_date: (dep.data as Row | null)?.first_booking_date ?? null,
     deposits_by_country: (dep.data as Row | null)?.rows ?? [],
+    deposits_by_destination: { last_30_days: slim((d30.data as Row | null)?.rows, dKeys), last_7_days: slim((d7.data as Row | null)?.rows, dKeys) },
+    seats_by_destination: seats,
+    ad_trend: trend.data ?? [],
     rules: rules.data ?? null,
     campaigns_last_30_days: slim(withSpend(c30.data), cKeep),
     campaigns_last_7_days: slim(withSpend(c7.data), cKeep),
