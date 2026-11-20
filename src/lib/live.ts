@@ -303,3 +303,16 @@ export async function mira(body: Record<string, unknown>): Promise<{ ok: boolean
   if (error && !data) return { ok: false, error: error.message };
   return (data ?? { ok: false, error: "No answer." }) as { ok: boolean; error?: string; note?: string };
 }
+
+/* ---------- Products: TravelCRM packages and departures that have been loaded ---------- */
+export type Departure = { departure_id: number; package_code: string | null; package_name: string | null; country: string | null; departure_date: string | null; seats_available: number | null; destination_id: string | null; updated_at: string };
+export async function fetchDepartures(): Promise<{ departures: Departure[]; pax: Map<number, number> }> {
+  if (!supabase) return { departures: [], pax: new Map() };
+  const [d, b] = await Promise.all([
+    supabase.from("crm_departures").select("*").order("departure_date").limit(1000),
+    supabase.from("crm_bookings").select("departure_id, pax, status").in("status", ["paid_deposit", "full_payment"]).limit(1000),
+  ]);
+  const pax = new Map<number, number>();
+  for (const r of (b.data ?? []) as { departure_id: number | null; pax: number }[]) if (r.departure_id) pax.set(r.departure_id, (pax.get(r.departure_id) ?? 0) + r.pax);
+  return { departures: (d.data ?? []) as Departure[], pax };
+}
