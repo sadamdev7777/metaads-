@@ -11,7 +11,7 @@ const cors = {
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-const GRAPH = "https://graph.facebook.com";
+const GRAPH = "https://graph.facebook.com/v27.0";
 const SECRETS: Record<string, string[]> = {
   website_form: ["leads_webhook_key"],
   whatsapp: ["whatsapp_token"],

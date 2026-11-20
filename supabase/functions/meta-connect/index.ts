@@ -12,7 +12,7 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-const GRAPH = "https://graph.facebook.com";
+const GRAPH = "https://graph.facebook.com/v27.0";
 const SECRET_NAME = "meta_access_token";
 
 type Account = { id: string; name: string; active: boolean; currency: string };
