@@ -4,7 +4,7 @@ import { Avatar, B, Bar, Btn, Card, Field, PageHead, Pill, Stat, T } from "../co
 import { fetchActivity, type ActivityRow } from "../lib/activity";
 import { useAuth } from "../lib/auth";
 import { MODE_ROWS } from "../lib/data";
-import { type Destination, analyst, count, fetchDestinations, rematch, removeDestination, rm, saveDestination, useCampaigns, useDestinationCost, useMonthTotals, when } from "../lib/live";
+import { type Destination, analyst, count, fetchDestinations, rematch, removeDestination, rm, saveDestination, setDepartureDestination, useCampaigns, useDestinationCost, useMonthTotals, useUnknownDepartures, when } from "../lib/live";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 
@@ -214,6 +214,18 @@ function Destinations() {
   useEffect(() => {
     void load();
   }, []);
+  const unknown = useUnknownDepartures();
+  const [savingDep, setSavingDep] = useState<number | null>(null);
+  async function setDep(dep: number, destId: string) {
+    const d = list.find((x) => x.id === destId);
+    if (!d) return;
+    setSavingDep(dep);
+    const err = await setDepartureDestination(dep, d.id);
+    setSavingDep(null);
+    act(`Set TravelCRM departure ${dep} to ${d.name}${err ? " (failed)" : ""}`, "Settings, Destinations", err ?? `Saved. Departure ${dep} now counts under ${d.name}.`);
+    if (!err) await Promise.all([unknown.reload(), cost.reload()]);
+  }
+  const unknownPax = unknown.data.reduce((n, r) => n + r.pax, 0);
 
   const unmatched = running.data.filter((c) => (c.delivery_status === "ACTIVE" || c.spend > 0) && !c.destination_id);
   const looseDeposits = (cost.data?.rows ?? []).filter((r) => !r.matched && r.pax > 0);
@@ -301,6 +313,43 @@ function Destinations() {
             </span>,
           ])}
         />
+      </Card>
+
+      <Card title="Deposits with no package" right={<Pill tone={unknown.data.length ? "a" : "g"}>{count(unknownPax)} pax in {unknown.data.length} departures</Pill>} className="!p-3">
+        {unknown.data.length === 0 ? (
+          <div className="px-2 text-sm">Every deposit belongs to a destination.</div>
+        ) : (
+          <>
+            <div className="px-2 pb-2 text-sm">
+              TravelCRM does not say which package these departures belong to. Open one of the bookings in TravelCRM to see the package, then pick the
+              destination here. Biggest first: the top few cover most of the pax. Each one is set once and remembered.
+            </div>
+            <T
+              minW={720}
+              right={[1, 2]}
+              heads={["TravelCRM departure", "Bookings", "Pax", "Booking IDs to look up", "Booked", "Destination"]}
+              rows={unknown.data.map((r) => [
+                <B>#{r.departure_id}</B>,
+                count(r.bookings),
+                count(r.pax),
+                r.booking_ids.join(", "),
+                r.first_date === r.last_date ? r.first_date.slice(5) : `${r.first_date.slice(5)} to ${r.last_date.slice(5)}`,
+                <select
+                  aria-label={`Destination for departure ${r.departure_id}`}
+                  value=""
+                  disabled={savingDep === r.departure_id}
+                  onChange={(e) => void setDep(r.departure_id, e.target.value)}
+                  className="min-h-[36px] max-w-[220px] rounded-lg border border-line bg-white px-2 text-sm"
+                >
+                  <option value="">{savingDep === r.departure_id ? "Saving…" : "Choose…"}</option>
+                  {list.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>,
+              ])}
+            />
+          </>
+        )}
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">

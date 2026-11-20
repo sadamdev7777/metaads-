@@ -1,0 +1,3 @@
+-- crm_departures.destination_manual / set_by_email, unknown_departures(), set_departure_destination(departure, destination),
+-- and apply_destinations() now leaves hand-set departures alone.
+-- Applied to the project on 2026-11-21 as migration "departure_manual_destination" (full definitions there).

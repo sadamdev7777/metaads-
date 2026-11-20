@@ -311,7 +311,7 @@ export type Departure = { departure_id: number; package_code: string | null; pac
 export async function fetchDepartures(): Promise<{ departures: Departure[]; pax: Map<number, number> }> {
   if (!supabase) return { departures: [], pax: new Map() };
   const [d, b] = await Promise.all([
-    supabase.from("crm_departures").select("*").order("departure_date").limit(1000),
+    supabase.from("crm_departures").select("*").not("package_name", "is", null).order("departure_date").limit(1000),
     supabase.from("crm_bookings").select("departure_id, pax, status").in("status", ["paid_deposit", "full_payment"]).limit(1000),
   ]);
   const pax = new Map<number, number>();
@@ -343,4 +343,13 @@ export async function fetchPendingProposals(): Promise<Proposal[]> {
   if (!supabase) return [];
   const { data } = await supabase.from("proposals").select("*").eq("is_sample", false).eq("status", "pending").order("created_at", { ascending: true }).limit(12);
   return (data ?? []) as Proposal[];
+}
+
+/** Departures with deposits whose package TravelCRM does not reveal. A person gives each one a destination by hand. */
+export type UnknownDeparture = { departure_id: number; bookings: number; pax: number; booking_ids: number[]; first_date: string; last_date: string; package_name: string | null };
+export const useUnknownDepartures = () => useRpc<UnknownDeparture[]>("unknown_departures", {}, []);
+export async function setDepartureDestination(departureId: number, destinationId: string | null) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  const { error } = await supabase.rpc("set_departure_destination", { p_departure: departureId, p_destination: destinationId });
+  return error?.message ?? null;
 }
