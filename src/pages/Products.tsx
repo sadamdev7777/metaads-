@@ -1,18 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { B, Card, PageHead, Pill, Stat, T } from "../components/ui";
+import { B, Card, PageHead, Pill, Stat } from "../components/ui";
 import { type Departure, type Destination, count, fetchDepartures, fetchDestinations, when } from "../lib/live";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
-const day = (iso: string | null) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" }) : "No date");
+const day = (iso: string | null, year = true) =>
+  iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-MY", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}) }) : "No date";
+/** "01. SABAH - KK KUNDASANG 2026" and "01. DOMESTIK - KK & KUNDASANG 2027" are the same product in different years. */
+const cleanName = (n: string | null) => (n ?? "Unnamed package").replace(/^\s*\d+\.\s*/, "").replace(/\s*\b20\d\d\b\s*$/, "").trim();
+
+type Group = { key: string; name: string; country: string; matched: boolean; packages: string[]; list: Departure[] };
 
 export default function Products() {
   const [deps, setDeps] = useState<Departure[]>([]);
   const [pax, setPax] = useState<Map<number, number>>(new Map());
   const [dests, setDests] = useState<Destination[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("");
+  const [country, setCountry] = useState("");
   const [past, setPast] = useState(false);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   useEffect(() => {
     void fetchDepartures().then((r) => {
       setDeps(r.departures);
@@ -22,42 +28,46 @@ export default function Products() {
     void fetchDestinations().then(setDests);
   }, []);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const destName = (id: string | null) => dests.find((d) => d.id === id)?.name ?? null;
+  const today = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
   const groups = useMemo(() => {
-    const map = new Map<string, Departure[]>();
+    const map = new Map<string, Group>();
     for (const d of deps) {
       if (!past && d.departure_date && d.departure_date < today) continue;
-      if (filter && d.destination_id !== filter) continue;
-      const key = d.package_name ?? "Unnamed package";
-      map.set(key, [...(map.get(key) ?? []), d]);
+      const dest = dests.find((x) => x.id === d.destination_id);
+      const key = dest ? dest.id : `p:${cleanName(d.package_name).toLowerCase()}`;
+      const g = map.get(key) ?? { key, name: dest?.name ?? cleanName(d.package_name), country: dest?.country ?? d.country ?? "Unknown", matched: Boolean(dest), packages: [], list: [] };
+      g.list.push(d);
+      if (d.package_name && !g.packages.includes(d.package_name)) g.packages.push(d.package_name);
+      map.set(key, g);
     }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [deps, filter, past, today]);
-  const upcoming = deps.filter((d) => !d.departure_date || d.departure_date >= today);
-  const lowSeats = upcoming.filter((d) => d.seats_available != null && d.seats_available <= 5).length;
+    return Array.from(map.values())
+      .filter((g) => !country || g.country === country)
+      .map((g) => ({ ...g, list: g.list.sort((a, b) => (a.departure_date ?? "").localeCompare(b.departure_date ?? "")) }))
+      .sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name));
+  }, [deps, dests, country, past, today]);
+
+  const all = groups.flatMap((g) => g.list);
+  const lowSeats = all.filter((d) => d.seats_available != null && d.seats_available <= 5).length;
   const lastLoad = deps.reduce((m, d) => (d.updated_at > m ? d.updated_at : m), "");
+  const countries = Array.from(new Set(deps.map((d) => dests.find((x) => x.id === d.destination_id)?.country ?? d.country ?? "Unknown"))).sort();
+  const th = "whitespace-nowrap border-b border-line px-3 py-2.5 text-xs font-semibold text-muted";
+  const td = "border-b border-line px-3 py-2.5 text-sm align-middle";
 
   return (
     <>
-      <PageHead title="Products" sub="Step 1. Packages and departure dates from TravelCRM, with seats left and deposits taken." />
-
-      <div className="rounded-xl bg-[#FBEFD5] px-5 py-4 text-sm">
-        <B>This is not the full TravelCRM catalogue yet.</B> It shows only the departures that had a closed booking in the days loaded so far. Packages
-        with no recent booking are missing. Seats are as they were at the last load ({lastLoad ? when(lastLoad) : "never"}).
-      </div>
+      <PageHead title="Products" sub="Step 1. Packages from TravelCRM by destination: when they depart, seats left and deposits taken." />
 
       <div className="flex flex-wrap gap-4">
-        <Stat label="Packages" value={loading ? "…" : count(new Set(upcoming.map((d) => d.package_name)).size)} sub="with upcoming dates" />
-        <Stat label="Upcoming departures" value={loading ? "…" : count(upcoming.length)} sub="loaded so far" />
-        <Stat label="5 seats or fewer" value={loading ? "…" : count(lowSeats)} sub="nearly full" />
+        <Stat label="Products" value={loading ? "…" : count(groups.length)} sub="destinations with departures" />
+        <Stat label="Departures" value={loading ? "…" : count(all.length)} sub={past ? "including past" : "upcoming"} />
+        <Stat label="Nearly full" value={loading ? "…" : count(lowSeats)} sub="5 seats or fewer" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <select aria-label="Destination" value={filter} onChange={(e) => setFilter(e.target.value)} className={INPUT}>
-          <option value="">All destinations</option>
-          {dests.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
+        <select aria-label="Country" value={country} onChange={(e) => setCountry(e.target.value)} className={INPUT}>
+          <option value="">All countries</option>
+          {countries.map((c) => (
+            <option key={c}>{c}</option>
           ))}
         </select>
         <label className="flex min-h-[44px] items-center gap-2 text-sm">
@@ -66,36 +76,90 @@ export default function Products() {
         </label>
       </div>
 
-      {!loading && groups.length === 0 && (
-        <Card title="Nothing loaded for this view">
-          <div className="text-sm">Departures appear here after the nightly TravelCRM load (00:45).</div>
-        </Card>
-      )}
+      <Card className="!p-2">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse" style={{ minWidth: 860 }}>
+            <thead>
+              <tr>
+                <th className={`${th} text-left`}>Product</th>
+                <th className={`${th} text-left`}>Departures from</th>
+                <th className={`${th} text-left`}>Until</th>
+                <th className={`${th} text-right`}>Dates</th>
+                <th className={`${th} text-right`}>Seats left</th>
+                <th className={`${th} text-right`}>Deposit pax</th>
+                <th className={`${th} text-left`} />
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((g) => {
+                const dated = g.list.filter((d) => d.departure_date);
+                const seats = g.list.reduce((n, d) => n + (d.seats_available ?? 0), 0);
+                const taken = g.list.reduce((n, d) => n + (pax.get(d.departure_id) ?? 0), 0);
+                const low = g.list.filter((d) => d.seats_available != null && d.seats_available <= 5).length;
+                const isOpen = Boolean(open[g.key]);
+                return (
+                  <Fragment key={g.key}>
+                    <tr>
+                      <td className={td}>
+                        <B>{g.name}</B>
+                        {!g.matched && (
+                          <span className="ml-2">
+                            <Pill tone="a">No destination</Pill>
+                          </span>
+                        )}
+                      </td>
+                      <td className={`${td} whitespace-nowrap`}>{dated.length ? day(dated[0].departure_date) : ""}</td>
+                      <td className={`${td} whitespace-nowrap`}>{dated.length ? day(dated[dated.length - 1].departure_date) : ""}</td>
+                      <td className={`${td} text-right`}>{count(g.list.length)}</td>
+                      <td className={`${td} text-right`}>
+                        {count(seats)}
+                        {low > 0 && <span className="ml-2 text-[12px] font-semibold text-[#8A5300]">{low} nearly full</span>}
+                      </td>
+                      <td className={`${td} text-right`}>{taken ? count(taken) : ""}</td>
+                      <td className={td}>
+                        <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [g.key]: !isOpen }))} className="min-h-[44px] whitespace-nowrap rounded-lg border border-[#9AA39E] bg-white px-3 text-[13px] font-semibold">
+                          {isOpen ? "Hide dates" : "Show dates"}
+                        </button>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={7} className="border-b border-line bg-ground px-3 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            {g.list.map((d) => {
+                              const s = d.seats_available;
+                              const tone = s === 0 ? "bg-[#ECEFEC] text-muted" : s != null && s <= 5 ? "bg-[#FBEFD5] text-[#5C3900]" : "bg-white text-ink";
+                              return (
+                                <span key={d.departure_id} className={`rounded-lg border border-line px-2.5 py-1.5 text-[13px] ${tone}`}>
+                                  <B>{day(d.departure_date)}</B> · {s == null ? "seats ?" : s === 0 ? "full" : `${s} left`}
+                                  {pax.get(d.departure_id) ? ` · ${pax.get(d.departure_id)} pax` : ""}
+                                </span>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-2 text-xs text-muted">In TravelCRM: {g.packages.join(" · ")}</div>
+                          {!g.matched && (
+                            <div className="mt-1 text-xs">
+                              <Link to="/settings/destinations" className="font-semibold">Add a word for it in Settings, Destinations</Link> so it counts with its campaigns.
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {!loading && groups.length === 0 && <div className="px-3 py-5 text-sm text-muted">Nothing loaded for this view. Departures appear after the nightly TravelCRM load (00:45).</div>}
+      </Card>
 
-      {groups.map(([name, list]) => {
-        const dest = destName(list[0].destination_id);
-        return (
-          <Card key={name} title={name} right={dest ? <Pill tone="t">{dest}</Pill> : <Pill tone="a">No destination</Pill>}>
-            <T
-              minW={520}
-              right={[1, 2]}
-              heads={["Departure", "Seats left", "Deposit pax (loaded)", ""]}
-              rows={list.map((d) => [
-                day(d.departure_date),
-                d.seats_available == null ? "" : count(d.seats_available),
-                pax.get(d.departure_id) ? count(pax.get(d.departure_id)!) : "",
-                d.seats_available === 0 ? <Pill tone="n">Full</Pill> : d.seats_available != null && d.seats_available <= 5 ? <Pill tone="a">Nearly full</Pill> : "",
-              ])}
-            />
-            {!dest && (
-              <div className="text-[13px] text-muted">
-                Not matched to a destination.{" "}
-                <Link to="/settings/destinations" className="font-semibold">Add a word for it in Settings, Destinations</Link>
-              </div>
-            )}
-          </Card>
-        );
-      })}
+      <p className="m-0 text-[13px] text-muted">
+        Packages for the same destination are shown as one product, across years. This is not the full TravelCRM catalogue: it holds the departures that
+        had a closed booking in the days loaded so far. Seats are as at the last load ({lastLoad ? when(lastLoad) : "never"}). Deposit pax counts loaded
+        bookings only.
+      </p>
     </>
   );
 }

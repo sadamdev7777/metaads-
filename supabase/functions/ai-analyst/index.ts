@@ -36,14 +36,40 @@ Rules for judgement:
 - Give numbers for every claim, taken from the data. Never invent a figure.
 - Write plain English that a busy marketing executive can act on. No jargon, no filler.
 
-Reply with one JSON object and nothing else, in this shape:
-{
-  "summary": "3 to 5 sentences: the state of the ads and the most important thing to do tomorrow",
-  "findings": [{"title": "short headline", "detail": "what the data shows, with numbers"}],
-  "review": [{"proposal": "the earlier proposal", "verdict": "right | wrong | too early", "detail": "what happened, with numbers"}],
-  "lessons": [{"lesson": "one reusable statement", "evidence": "the numbers behind it", "confidence": "low | medium | high"}],
-  "proposals": [{"action_type": "Turn off ad | Turn off ad set | Raise budget | Lower budget | Move budget | Test new creative | Check", "level": "campaign | ad_set | ad", "target": "Campaign > Ad set > Ad, exactly as named in the data", "id": "the id from the data, or null", "reason": "why, in one or two sentences", "numbers": "the key figures", "expected": "what should happen if this is done", "confidence": "low | medium | high"}]
-}`;
+Hand in your work by calling the submit_report tool once. Keep it tight so it is quick to read: at most 6 findings, at most 8 review items, at most 6 lessons, at most 8 proposals, and no field longer than about 60 words.`;
+
+const REPORT_TOOL = {
+  name: "submit_report",
+  description: "Hand in tonight's report: summary, findings, review of earlier proposals, lessons and proposals.",
+  input_schema: {
+    type: "object",
+    properties: {
+      summary: { type: "string", description: "3 to 5 sentences: the state of the ads and the most important thing to do tomorrow" },
+      findings: { type: "array", items: { type: "object", properties: { title: { type: "string" }, detail: { type: "string", description: "what the data shows, with numbers" } }, required: ["title", "detail"] } },
+      review: { type: "array", items: { type: "object", properties: { proposal: { type: "string" }, verdict: { type: "string", enum: ["right", "wrong", "too early"] }, detail: { type: "string" } }, required: ["proposal", "verdict", "detail"] } },
+      lessons: { type: "array", items: { type: "object", properties: { lesson: { type: "string" }, evidence: { type: "string" }, confidence: { type: "string", enum: ["low", "medium", "high"] } }, required: ["lesson", "evidence", "confidence"] } },
+      proposals: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            action_type: { type: "string", enum: ["Turn off ad", "Turn off ad set", "Turn off campaign", "Raise budget", "Lower budget", "Move budget", "Test new creative", "Check"] },
+            level: { type: "string", enum: ["campaign", "ad_set", "ad"] },
+            target: { type: "string", description: "Campaign > Ad set > Ad, exactly as named in the data" },
+            id: { type: ["string", "null"], description: "the id of that campaign or ad from the data, or null" },
+            reason: { type: "string", description: "why, in one or two sentences" },
+            numbers: { type: "string", description: "the key figures" },
+            how: { type: "string", description: "exactly what to change, for example the new daily budget in RM" },
+            expected: { type: "string", description: "what should happen if this is done" },
+            confidence: { type: "string", enum: ["low", "medium", "high"] },
+          },
+          required: ["action_type", "level", "target", "reason", "numbers", "how", "expected", "confidence"],
+        },
+      },
+    },
+    required: ["summary", "findings", "review", "lessons", "proposals"],
+  },
+};
 
 function extractJson(text: string): Row | null {
   const start = text.indexOf("{");
@@ -193,9 +219,11 @@ Deno.serve(async (req: Request) => {
     headers: headers(key),
     body: JSON.stringify({
       model,
-      max_tokens: 6000,
+      max_tokens: 12000,
       system: SYSTEM,
-      messages: [{ role: "user", content: `Here is tonight's data as JSON. Study it and reply with the JSON object described.\n\n${JSON.stringify(brief)}` }],
+      tools: [REPORT_TOOL],
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content: `Here is tonight's data as JSON. Study it, then call the submit_report tool with your report. Do not answer in plain text.\n\n${JSON.stringify(brief)}` }],
     }),
   });
   const out = await res.json().catch(() => ({}));
@@ -204,11 +232,14 @@ Deno.serve(async (req: Request) => {
     await setStatus({ status: "check", detail: `Last night's study failed: ${message}` });
     return json({ ok: false, error: message });
   }
-  const text = ((out.content ?? []) as Row[]).filter((b) => b.type === "text").map((b) => String(b.text)).join("");
-  const parsed = extractJson(text);
+  // The report comes back as the input of the submit_report tool; plain text is the fallback.
+  const blocks = (out.content ?? []) as Row[];
+  const viaTool = blocks.find((b) => b.type === "tool_use" && b.name === "submit_report")?.input as Row | undefined;
+  const parsed = viaTool ?? extractJson(blocks.filter((b) => b.type === "text").map((b) => String(b.text)).join(""));
   if (!parsed || typeof parsed.summary !== "string") {
-    await setStatus({ status: "check", detail: "Last night's study came back in a form the system could not read." });
-    return json({ ok: false, error: "The model's answer could not be read. Nothing was saved." });
+    const why = out.stop_reason === "max_tokens" ? "The report was cut off before it finished (too long)." : `The report came back in a form the system could not read (stop reason: ${out.stop_reason ?? "unknown"}).`;
+    await setStatus({ status: "check", detail: `Last study failed: ${why}` });
+    return json({ ok: false, error: `${why} Nothing was saved.` });
   }
 
   const list = (v: unknown) => (Array.isArray(v) ? (v as Row[]) : []);
@@ -229,7 +260,7 @@ Deno.serve(async (req: Request) => {
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const newProposals = list(parsed.proposals).filter((p) => p.target && p.action_type).slice(0, 8).map((p) => ({
     action_type: str(p.action_type, 60), target: str(p.target, 300), reason: str(p.reason, 800), numbers: str(p.numbers, 400),
-    expected: str(p.expected, 400), confidence: str(p.confidence, 20), agent: "analyst", status: "pending", report_id: report.id,
+    how: str(p.how, 400), expected: str(p.expected, 400), confidence: str(p.confidence, 20), agent: "analyst", status: "pending", report_id: report.id,
     entity_level: ["campaign", "ad_set", "ad"].includes(String(p.level)) ? String(p.level) : null,
     entity_id: typeof p.id === "string" && uuid.test(p.id) ? p.id : null, is_sample: false,
   }));

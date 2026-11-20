@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { B, Btn, Card, PageHead, Pill, RunBy } from "../components/ui";
 import { useAuth } from "../lib/auth";
 import { useEffect } from "react";
-import { type CampaignRow, type Destination, count, cpl, delivery, fetchDestinations, guessRunBy, rm, saveTag, syncNow, useCampaigns, useMonthTotals, when } from "../lib/live";
+import { type CampaignRow, type Destination, count, cpl, delivery, PERIODS, fetchDestinations, guessRunBy, period, rm, saveTag, syncNow, useCampaignsIn, useMonthTotals, when } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -27,9 +27,9 @@ function Pick({ id, label, value, onChange, options }: { id: string; label: stri
 export default function Campaigns() {
   const { act } = useStore();
   const { user } = useAuth();
-  const [days, setDays] = useState("Last 30 days");
-  const nDays = days === "Last 7 days" ? 7 : days === "This and last month" ? 60 : 30;
-  const { data, loading, error, reload, setData } = useCampaigns(nDays);
+  const [days, setDays] = useState("Last 7 days");
+  const range = useMemo(() => period(days), [days]);
+  const { data, loading, error, reload, setData } = useCampaignsIn(range);
   const totals = useMonthTotals();
   const [country, setCountry] = useState("All countries");
   const [runBy, setRunBy] = useState("Everyone");
@@ -131,7 +131,7 @@ export default function Campaigns() {
       )}
 
       <div className="flex flex-wrap items-end gap-4">
-        <Pick id="cd" label="Period" value={days} onChange={setDays} options={["Last 7 days", "Last 30 days", "This and last month"]} />
+        <Pick id="cd" label="Period" value={days} onChange={setDays} options={PERIODS} />
         <Pick id="cs" label="Show" value={show} onChange={(v) => { setShow(v); setShown(PAGE); }} options={["Active or with spend", "Active only", "Not tagged", "Everything"]} />
         <Pick id="cc" label="Country" value={country} onChange={(v) => { setCountry(v); setShown(PAGE); }} options={["All countries", ...COUNTRIES, "Not tagged"]} />
         <Pick id="cr" label="Run by" value={runBy} onChange={(v) => { setRunBy(v); setShown(PAGE); }} options={["Everyone", ...people]} />
@@ -145,7 +145,7 @@ export default function Campaigns() {
 
       <Card className="!p-2">
         <div className="px-3 pt-2 text-[13px] text-muted">
-          {loading ? "Loading…" : `${count(rows.length)} campaign${rows.length === 1 ? "" : "s"}. Spend ${rm(sum.spend)}, leads ${count(sum.leads)}${sum.leads ? `, CPL ${cpl(sum.spend, sum.leads)}` : ""}.`}
+          {loading ? "Loading…" : `${range.from === range.to ? range.from : `${range.from} to ${range.to}`}. ${count(rows.length)} campaign${rows.length === 1 ? "" : "s"}. Spend ${rm(sum.spend)}, leads ${count(sum.leads)}${sum.leads ? `, CPL ${cpl(sum.spend, sum.leads)}` : ""}.`}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse" style={{ minWidth: 1020 }}>

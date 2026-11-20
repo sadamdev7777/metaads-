@@ -101,6 +101,11 @@ export default function Approvals() {
                   <B>{p.numbers}</B>
                 </div>
               )}
+              {p.how && (
+                <div className="text-sm">
+                  <B>What to change:</B> {p.how}
+                </div>
+              )}
               {p.expected && <div className="text-[13px] text-muted">Expected: {p.expected}</div>}
               <div>
                 <Pill tone={confTone(p.confidence)}>Confidence: {p.confidence ?? "not stated"}</Pill>

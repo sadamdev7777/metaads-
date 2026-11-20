@@ -1,0 +1,3 @@
+-- campaign_overview_range(p_from, p_to), campaign_tree_range(p_campaign, p_from, p_to) and
+-- destination_cost_range(p_from, p_to): the same figures as the p_days versions, for any range of days.
+-- Applied to the project on 2026-11-21 as migration "range_functions" (full definitions there).

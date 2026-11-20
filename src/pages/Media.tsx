@@ -18,6 +18,7 @@ export default function MediaPage() {
   const [form, setForm] = useState({ destination_id: "", placement: "Reels", talent: "", note: "" });
   const [filter, setFilter] = useState("");
   const pick = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
   const load = async () => {
     setItems(await fetchMedia());
     setLoading(false);
@@ -81,12 +82,25 @@ export default function MediaPage() {
             <input id="mn" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Hook, angle or version, e.g. H1 snow scene" className={INPUT} />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <input ref={pick} id="mf" type="file" multiple accept="image/*,video/*" className="sr-only" onChange={(e) => void upload(e.target.files)} />
-          <Btn disabled={Boolean(busy)} onClick={() => pick.current?.click()}>
-            {busy || "Choose files to upload"}
+        <input ref={pick} id="mf" type="file" multiple accept="image/*,video/*" className="sr-only" onChange={(e) => void upload(e.target.files)} />
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(false);
+            if (!busy) void upload(e.dataTransfer.files);
+          }}
+          className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center ${over ? "border-brand bg-[#E6F1EE]" : "border-[#9AA39E] bg-ground"}`}
+        >
+          <div className="text-base font-bold">{busy || (over ? "Drop to upload" : "Drag files here")}</div>
+          <div className="text-[13px] text-muted">Images and videos, up to 50 MB each. The tags above are applied to every file.</div>
+          <Btn kind="s" disabled={Boolean(busy)} onClick={() => pick.current?.click()}>
+            Or choose files
           </Btn>
-          <span className="text-[13px] text-muted">Images and videos, up to 50 MB each. The tags above are applied to every file you choose.</span>
         </div>
       </Card>
 

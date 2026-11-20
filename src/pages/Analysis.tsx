@@ -1,7 +1,8 @@
 import { Fragment, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { B, Card, PageHead, Pill, RunBy, T } from "../components/ui";
-import { type AdSetRow, type CampaignRow, count, cpl, delivery, fetchTree, paxLabel, paxTone, perPax, rm, rm2, useCampaigns, useDestinationCost, useMonthTotals, when } from "../lib/live";
+import { useEffect } from "react";
+import { PERIODS, type AdSetRow, type CampaignRow, type Proposal, type Report, confTone, count, cpl, delivery, fetchLatestReport, fetchPendingProposals, fetchTreeIn, paxLabel, paxTone, perPax, period, rm, rm2, useCampaignsIn, useDestinationCostIn, useMonthTotals, when } from "../lib/live";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 type Group = { key: string; campaigns: number; spend: number; leads: number; impressions: number; clicks: number };
@@ -24,15 +25,22 @@ const total = (list: Group[]): Group => list.reduce((t, g) => ({ key: "Total", c
 const NONE = "Not tagged";
 
 export default function Analysis() {
-  const [days, setDays] = useState("Last 30 days");
-  const nDays = days === "Last 7 days" ? 7 : days === "This and last month" ? 60 : 30;
-  const { data, loading, error } = useCampaigns(nDays);
+  const [days, setDays] = useState("Last 7 days");
+  const range = useMemo(() => period(days), [days]);
+  const nDays = range.days;
+  const { data, loading, error } = useCampaignsIn(range);
+  const [report, setReport] = useState<Report | null>(null);
+  const [recs, setRecs] = useState<Proposal[]>([]);
+  useEffect(() => {
+    void fetchLatestReport().then(setReport);
+    void fetchPendingProposals().then(setRecs);
+  }, []);
   const totals = useMonthTotals();
   const [country, setCountry] = useState("All countries");
-  const cost = useDestinationCost(nDays);
+  const cost = useDestinationCostIn(range);
   const costRows = (cost.data?.rows ?? []).filter((r) => r.spend > 0 || r.pax > 0);
   const costCountries = Array.from(new Set(costRows.map((r) => r.country)));
-  const windowStart = new Date(Date.now() - (nDays - 1) * 86400000).toISOString().slice(0, 10);
+  const windowStart = range.from;
   const partial = Boolean(cost.data?.first_booking_date && cost.data.first_booking_date > windowStart);
   const [open, setOpen] = useState<Record<string, AdSetRow[] | "loading">>({});
 
@@ -45,7 +53,7 @@ export default function Analysis() {
   async function toggle(c: CampaignRow) {
     if (open[c.id]) return setOpen(({ [c.id]: _gone, ...rest }) => rest);
     setOpen((o) => ({ ...o, [c.id]: "loading" }));
-    const tree = await fetchTree(c.id, nDays);
+    const tree = await fetchTreeIn(c.id, range);
     setOpen((o) => ({ ...o, [c.id]: tree }));
   }
 
@@ -57,10 +65,10 @@ export default function Analysis() {
     <>
       <PageHead
         title="Analysis"
-        sub={`Step 4. Live from Meta Ads, campaigns with spend only. Last sync ${when(totals.data?.last_good_sync)}.`}
+        sub={`Step 4. ${range.from === range.to ? range.from : `${range.from} to ${range.to}`}. Campaigns with spend only. Last sync ${when(totals.data?.last_good_sync)}.`}
         right={
           <select aria-label="Period" value={days} onChange={(e) => { setDays(e.target.value); setOpen({}); }} className={INPUT}>
-            {["Last 7 days", "Last 30 days", "This and last month"].map((o) => (
+            {PERIODS.map((o) => (
               <option key={o}>{o}</option>
             ))}
           </select>
@@ -68,6 +76,54 @@ export default function Analysis() {
       />
 
       {error && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]">Could not load the figures: {error}</div>}
+
+      <Card
+        title="What Luqman recommends"
+        right={report ? <div className="text-[13px] text-muted">Studied {when(report.created_at)}, last 30 days</div> : undefined}
+      >
+        {report ? (
+          <>
+            <div className="text-[15px] leading-relaxed">{report.summary}</div>
+            {recs.length > 0 ? (
+              <div className="flex flex-col gap-2.5">
+                {recs.map((r, i) => (
+                  <div key={r.id} className="rounded-lg border border-line px-3.5 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">{i + 1}</span>
+                      <Pill tone="a">{r.action_type}</Pill>
+                      <B>{r.target}</B>
+                      <Pill tone={confTone(r.confidence)}>{r.confidence ?? "?"} confidence</Pill>
+                    </div>
+                    <div className="mt-2 grid gap-x-6 gap-y-1.5 text-sm md:grid-cols-2">
+                      <div>
+                        <span className="text-[12px] font-bold uppercase text-muted">Why</span>
+                        <div>{r.reason}</div>
+                        {r.numbers && <div className="text-[13px] font-semibold">{r.numbers}</div>}
+                      </div>
+                      <div>
+                        <span className="text-[12px] font-bold uppercase text-muted">What to change</span>
+                        <div>{r.how ?? r.action_type}</div>
+                        {r.expected && <div className="text-[13px] text-muted">Expected: {r.expected}</div>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted">No open recommendations: they have all been decided, or none were made.</div>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to="/approvals" className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
+                Decide in Approvals
+              </Link>
+              <Link to="/ai-office" className="text-sm font-semibold">Full report and notebook</Link>
+            </div>
+            <div className="text-xs text-muted">Written by an AI model from Meta figures and deposits by country. His study always covers the last 30 days, whatever period is chosen above. Check the numbers before acting.</div>
+          </>
+        ) : (
+          <div className="text-sm">No study yet. Luqman studies the ads every night at 02:10, or press Study the ads now in AI Office.</div>
+        )}
+      </Card>
       {untagged.length > 0 && (
         <div className="rounded-xl bg-[#FBEFD5] px-5 py-4 text-sm">
           <B>{untagged.length} campaign{untagged.length === 1 ? "" : "s"} with spend are not matched to a destination</B>, so {rm(untagged.reduce((n, c) => n + c.spend, 0))} sits under

@@ -16,6 +16,7 @@ export default function AIOffice() {
   const [report, setReport] = useState<Report | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [aiOn, setAiOn] = useState(false);
+  const [aiNote, setAiNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -24,12 +25,13 @@ export default function AIOffice() {
       supabase.from("sync_runs").select("*").order("id", { ascending: false }).limit(12),
       fetchLatestReport(),
       fetchLessons(),
-      supabase.from("integration_status").select("status").eq("key", "ai_model").maybeSingle(),
+      supabase.from("integration_status").select("status, secret_hint, detail").eq("key", "ai_model").maybeSingle(),
     ]);
     setRuns((r.data ?? []) as Run[]);
     setReport(rep);
     setLessons(les);
-    setAiOn(ai.data?.status === "connected");
+    setAiOn(Boolean(ai.data?.secret_hint));
+    setAiNote(ai.data?.status === "check" ? ai.data?.detail ?? "" : "");
   }
   useEffect(() => { void load(); }, []);
   const lastGood = runs.find((r) => r.ok);
@@ -66,6 +68,8 @@ export default function AIOffice() {
           )
         }
       />
+
+      {aiNote && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]"><B>Luqman's last study did not finish.</B> {aiNote} Press Study the ads now to try again.</div>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {STAFF.map((s) => {

@@ -145,6 +145,7 @@ export type Proposal = {
   decided_by_email: string | null;
   decided_at: string | null;
   apply_note: string | null;
+  how: string | null;
 };
 export type AdsAction = { id: number; proposal_id: string | null; kind: string; ok: boolean; undone_at: string | null };
 export type ApplyResult = { ok: boolean; error?: string; note?: string; manual?: boolean; need_budget?: boolean; current?: number; max?: number; name?: string; level?: string };
@@ -315,4 +316,30 @@ export async function fetchDepartures(): Promise<{ departures: Departure[]; pax:
   const pax = new Map<number, number>();
   for (const r of (b.data ?? []) as { departure_id: number | null; pax: number }[]) if (r.departure_id) pax.set(r.departure_id, (pax.get(r.departure_id) ?? 0) + r.pax);
   return { departures: (d.data ?? []) as Departure[], pax };
+}
+
+/* ---------- Periods: the same choices on Campaigns and Analysis ---------- */
+export type Period = { label: string; from: string; to: string; days: number };
+const myDay = (back: number) => new Date(Date.now() + 8 * 3600000 - back * 86400000).toISOString().slice(0, 10);
+export const PERIODS = ["Today", "Yesterday", "Last 5 days", "Last 7 days", "Last 30 days"];
+export function period(label: string): Period {
+  switch (label) {
+    case "Today": return { label, from: myDay(0), to: myDay(0), days: 1 };
+    case "Yesterday": return { label, from: myDay(1), to: myDay(1), days: 1 };
+    case "Last 5 days": return { label, from: myDay(4), to: myDay(0), days: 5 };
+    case "Last 30 days": return { label, from: myDay(29), to: myDay(0), days: 30 };
+    default: return { label: "Last 7 days", from: myDay(6), to: myDay(0), days: 7 };
+  }
+}
+export const useCampaignsIn = (p: Period) => useRpc<CampaignRow[]>("campaign_overview_range", { p_from: p.from, p_to: p.to }, []);
+export const useDestinationCostIn = (p: Period) => useRpc<DestCostData | null>("destination_cost_range", { p_from: p.from, p_to: p.to }, null);
+export async function fetchTreeIn(campaignId: string, p: Period): Promise<AdSetRow[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.rpc("campaign_tree_range", { p_campaign: campaignId, p_from: p.from, p_to: p.to });
+  return (data ?? []) as AdSetRow[];
+}
+export async function fetchPendingProposals(): Promise<Proposal[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("proposals").select("*").eq("is_sample", false).eq("status", "pending").order("created_at", { ascending: true }).limit(12);
+  return (data ?? []) as Proposal[];
 }
