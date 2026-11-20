@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { pendingCount } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const NAV: { to: string; label: string; step?: string }[] = [
@@ -17,7 +18,15 @@ const NAV: { to: string; label: string; step?: string }[] = [
 export default function Layout() {
   const { user, demo, signOut } = useAuth();
   const { toast } = useStore();
-  const approvals: unknown[] = [];
+  const [pending, setPending] = useState(0);
+  const loc0 = useLocation();
+  useEffect(() => {
+    const refresh = () => void pendingCount().then(setPending);
+    refresh();
+    window.addEventListener("mtb:proposals", refresh);
+    return () => window.removeEventListener("mtb:proposals", refresh);
+  }, [loc0.pathname]);
+  const approvals = { length: pending };
   const [open, setOpen] = useState(false);
   const loc = useLocation();
 

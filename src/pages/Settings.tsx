@@ -4,7 +4,7 @@ import { Avatar, B, Bar, Btn, Card, Field, PageHead, Pill, Stat, T } from "../co
 import { fetchActivity, type ActivityRow } from "../lib/activity";
 import { useAuth } from "../lib/auth";
 import { MODE_ROWS } from "../lib/data";
-import { rm, useCampaigns, useMonthTotals, when } from "../lib/live";
+import { analyst, rm, useCampaigns, useMonthTotals, when } from "../lib/live";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 
@@ -308,6 +308,8 @@ function Integrations() {
         {rows.map((r) =>
           r.key === "meta_ads" ? (
             <MetaAdsCard key={r.key} row={r} reload={() => load(false)} />
+          ) : r.key === "ai_model" ? (
+            <AiModelCard key={r.key} row={r} reload={() => load(false)} />
           ) : r.key === "website_form" ? (
             <WebsiteFormCard key={r.key} row={r} reload={() => load(false)} />
           ) : CONNECT[r.key] ? (
@@ -704,6 +706,79 @@ Content-Type: application/json
         )}
       </div>
       {note}
+    </Card>
+  );
+}
+
+/** AI model: the Anthropic API key Luqman thinks with. Checked by listing models, which costs nothing. */
+function AiModelCard({ row, reload }: { row: Integ; reload: () => Promise<void> }) {
+  const { act } = useStore();
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const cfg = (row.config ?? {}) as { model?: string; models?: string[] };
+  const connected = Boolean(row.secret_hint);
+
+  async function call(action: string, extra: Record<string, unknown>, logText: string, okText: string) {
+    setBusy(true);
+    setMsg(null);
+    const r = await analyst(action, extra);
+    setBusy(false);
+    setMsg({ ok: r.ok, text: r.ok ? okText : r.error ?? "Something went wrong." });
+    act(`${logText}${r.ok ? "" : " (failed)"}`, "Settings, Integrations", r.ok ? okText : r.error);
+    if (r.ok) setKey("");
+    await reload();
+  }
+
+  return (
+    <Card title="AI model" right={statusPill(row.status)} className="md:col-span-2">
+      <div className="text-sm">{row.used_for}</div>
+      <div className="text-[13px] text-muted">{row.detail}</div>
+      {connected ? (
+        <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg bg-ground px-3 py-2.5 text-sm">
+          <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+            <label htmlFor="ai-model" className="text-[13px] font-semibold">
+              Model
+            </label>
+            <select id="ai-model" value={cfg.model ?? ""} disabled={busy} onChange={(e) => void call("set_model", { model: e.target.value }, `Changed the AI model to ${e.target.value}`, "Model changed.")} className={INPUT_CLS}>
+              {(cfg.models ?? []).map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+            <div className="text-xs text-muted">
+              Key ending <span className="font-mono">••••{row.secret_hint}</span>, saved by {row.updated_by_email || "unknown"}. A larger model thinks better and costs more per study.
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Btn small kind="s" disabled={busy} onClick={() => void call("test", {}, "Tested the AI model connection", "The key works.")}>
+              Test connection
+            </Btn>
+            <Btn small kind="s" disabled={busy} onClick={() => void call("disconnect", {}, "Disconnected the AI model", "Disconnected. The key was removed.")}>
+              Disconnect
+            </Btn>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <ol className="m-0 list-decimal pl-5 text-[13px] text-muted">
+            <li>Sign in at console.anthropic.com, add billing, and create an API key.</li>
+            <li>Paste it here. It is checked, stored encrypted, and never shown again.</li>
+            <li>Luqman then studies the ads every night at 02:10. Each study is one request to the model, billed to your Anthropic account.</li>
+          </ol>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex min-w-[240px] flex-1 flex-col gap-1.5">
+              <label htmlFor="ai-key" className="text-[13px] font-semibold">
+                Anthropic API key
+              </label>
+              <input id="ai-key" type="password" autoComplete="off" spellCheck={false} value={key} onChange={(e) => setKey(e.target.value)} className={INPUT_CLS} />
+            </div>
+            <Btn disabled={busy || key.trim().length < 20} onClick={() => void call("save_key", { api_key: key }, "Saved the AI model key", "Key accepted and saved.")}>
+              {busy ? "Checking…" : "Save and test"}
+            </Btn>
+          </div>
+        </div>
+      )}
+      {msg && <div role="status" className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${msg.ok ? "bg-[#E3F2E9] text-[#17663F]" : "bg-[#FBE6E3] text-[#A3231B]"}`}>{msg.text}</div>}
     </Card>
   );
 }

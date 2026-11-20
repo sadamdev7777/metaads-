@@ -1,72 +1,171 @@
 import { useEffect, useState } from "react";
-import { Avatar, B, Card, PageHead, Pill, T } from "../components/ui";
+import { Link } from "react-router-dom";
+import { Avatar, B, Btn, Card, PageHead, Pill, T } from "../components/ui";
+import { useAuth } from "../lib/auth";
 import { STAFF } from "../lib/data";
-import { when } from "../lib/live";
+import { type Lesson, type Report, analyst, confTone, fetchLatestReport, fetchLessons, removeLesson, when } from "../lib/live";
+import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 
 type Run = { id: number; started_at: string; finished_at: string | null; ok: boolean | null; error: string | null; triggered_by: string | null; summary: Record<string, number> };
 
 export default function AIOffice() {
+  const { user } = useAuth();
+  const { act } = useStore();
   const [runs, setRuns] = useState<Run[]>([]);
-  useEffect(() => {
+  const [report, setReport] = useState<Report | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [aiOn, setAiOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
     if (!supabase) return;
-    void supabase.from("sync_runs").select("*").order("id", { ascending: false }).limit(24).then(({ data }) => setRuns((data ?? []) as Run[]));
-  }, []);
+    const [r, rep, les, ai] = await Promise.all([
+      supabase.from("sync_runs").select("*").order("id", { ascending: false }).limit(12),
+      fetchLatestReport(),
+      fetchLessons(),
+      supabase.from("integration_status").select("status").eq("key", "ai_model").maybeSingle(),
+    ]);
+    setRuns((r.data ?? []) as Run[]);
+    setReport(rep);
+    setLessons(les);
+    setAiOn(ai.data?.status === "connected");
+  }
+  useEffect(() => { void load(); }, []);
   const lastGood = runs.find((r) => r.ok);
+
+  async function study() {
+    setBusy(true);
+    act("Asked Luqman to study the ads now", "AI Office", "Luqman is studying the ads. This takes about a minute.");
+    const r = await analyst("run");
+    setBusy(false);
+    act(r.ok ? "Luqman finished a study" : "Luqman's study failed", "AI Office", r.ok ? `Done: ${String(r.proposals)} proposals, ${String(r.lessons)} new lessons.` : r.error ?? "Failed.");
+    await load();
+    window.dispatchEvent(new Event("mtb:proposals"));
+  }
+  async function drop(l: Lesson) {
+    await removeLesson(l.id, user?.email ?? "");
+    setLessons((list) => list.filter((x) => x.id !== l.id));
+    act(`Removed a lesson from Luqman's notebook: ${l.lesson.slice(0, 80)}`, "AI Office", "Removed. Luqman will no longer use it.");
+  }
 
   return (
     <>
-      <PageHead title="AI Office" sub="4 AI staff. Data Keeper is running. The other three start in later phases and do nothing yet." />
+      <PageHead
+        title="AI Office"
+        sub="Dara keeps the data. Luqman studies the ads at night and learns. Adam and Mira start in later phases."
+        right={
+          aiOn ? (
+            <Btn disabled={busy} onClick={() => void study()}>
+              {busy ? "Luqman is studying…" : "Study the ads now"}
+            </Btn>
+          ) : (
+            <Link to="/settings/integrations" className="flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
+              Connect AI model
+            </Link>
+          )
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {STAFF.map((s) => {
-          const on = s.who === "data";
+          const on = s.who === "data" || (s.who === "ana" && aiOn);
           return (
             <Card key={s.who}>
               <div className="flex items-center gap-3.5">
                 <Avatar who={s.who} state={on ? "work" : "idle"} size={64} />
                 <div className="min-w-0">
                   <h2 className="m-0 text-lg font-bold">{s.name}</h2>
-                  <div className="mt-1">
+                  <div className="text-[13px] text-muted">{s.role}</div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
                     <Pill tone={on ? "g" : "n"}>{on ? "Running" : "Not started"}</Pill>
+                    <Pill>{s.kind}</Pill>
                   </div>
                 </div>
               </div>
               <div className="text-[13px] text-muted">{s.job}</div>
-              <div className="rounded-lg bg-ground px-3 py-2.5 text-sm">
-                {on ? (
-                  <>
-                    <span className="font-semibold">Last sync:</span> {when(lastGood?.finished_at)}. Next: every hour, 7 minutes past.
-                  </>
+              <div className="mt-auto rounded-lg bg-ground px-3 py-2.5 text-sm">
+                {s.who === "data" ? (
+                  <>Last sync {when(lastGood?.finished_at)}. Every hour, and in full at 01:37.</>
+                ) : s.who === "ana" && aiOn ? (
+                  <>Last study {when(report?.created_at)}. Every night at 02:10.</>
                 ) : (
                   s.starts
                 )}
-              </div>
-              <div className="mt-auto">
-                <Pill>{on ? "Read only" : "Mode: Approval"}</Pill>
               </div>
             </Card>
           );
         })}
       </div>
 
-      <Card title="Data Keeper log" sub="Every sync with Meta, newest first.">
+      <Card
+        title="Luqman's night report"
+        right={report ? <div className="text-[13px] text-muted">{when(report.created_at)}{report.triggered_by && report.triggered_by !== "schedule" ? `, asked by ${report.triggered_by}` : ""}</div> : undefined}
+      >
+        {report ? (
+          <>
+            <div className="text-[15px] leading-relaxed">{report.summary}</div>
+            {report.findings?.length > 0 && (
+              <div className="flex flex-col gap-2.5">
+                {report.findings.map((f, i) => (
+                  <div key={i} className="rounded-lg bg-ground px-3 py-2.5 text-sm">
+                    <B>{f.title}</B>
+                    <div>{f.detail}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {report.review?.length > 0 && (
+              <>
+                <div className="text-[13px] font-semibold text-muted">How his earlier advice turned out</div>
+                <T
+                  minW={640}
+                  heads={["Earlier proposal", "Verdict", "What happened"]}
+                  rows={report.review.map((r) => [r.proposal, <Pill tone={r.verdict === "right" ? "g" : r.verdict === "wrong" ? "r" : "n"}>{r.verdict}</Pill>, r.detail])}
+                />
+              </>
+            )}
+            <div>
+              <Link to="/approvals" className="inline-flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-4 text-sm font-semibold text-ink no-underline">
+                See his proposals in Approvals
+              </Link>
+            </div>
+            <div className="text-xs text-muted">Written by an AI model ({report.model}) from Meta figures only. Check the numbers before acting.</div>
+          </>
+        ) : (
+          <div className="text-sm">{aiOn ? "No study yet. Press Study the ads now, or wait for tonight." : "Luqman needs an AI model. Add an Anthropic API key in Settings, Integrations and he starts tonight."}</div>
+        )}
+      </Card>
+
+      <Card title="Luqman's notebook" sub="What he has learned about MTB's ads. He reads this before every study, and Mira will use it to plan campaigns. Remove a lesson that is wrong and he stops using it.">
+        {lessons.length > 0 ? (
+          <T
+            minW={760}
+            heads={["Lesson", "Evidence", "Confidence", "Learned", ""]}
+            rows={lessons.map((l) => [
+              <B>{l.lesson}</B>,
+              l.evidence,
+              <Pill tone={confTone(l.confidence)}>{l.confidence ?? ""}</Pill>,
+              when(l.created_at),
+              <Btn small kind="s" onClick={() => void drop(l)}>
+                Remove
+              </Btn>,
+            ])}
+          />
+        ) : (
+          <div className="text-sm text-muted">Empty. Lessons appear after his first study.</div>
+        )}
+      </Card>
+
+      <Card title="Dara's log" sub="Every sync with Meta, newest first.">
         <T
           minW={760}
           heads={["Started", "Started by", "Result", "Details"]}
           rows={runs.map((r) => [
             when(r.started_at),
-            r.triggered_by === "schedule" ? "Hourly schedule" : r.triggered_by ?? "",
+            r.triggered_by === "schedule" ? "Schedule" : r.triggered_by ?? "",
             r.ok === null ? Date.now() - new Date(r.started_at).getTime() > 300000 ? <Pill>Stopped early</Pill> : <Pill tone="a">Running</Pill> : r.ok ? <Pill tone="g">Done</Pill> : <Pill tone="r">Failed</Pill>,
-            r.ok === false ? (
-              r.error
-            ) : r.summary?.campaigns ? (
-              <span>
-                <B>{r.summary.campaigns}</B> campaigns, <B>{r.summary.ad_sets}</B> ad sets, <B>{r.summary.ads}</B> ads, {r.summary.spend_rows} spend rows
-              </span>
-            ) : (
-              `${r.summary?.spend_rows ?? 0} spend rows (history)`
-            ),
+            r.ok === false ? r.error : `${r.summary?.campaigns ?? 0} campaigns, ${r.summary?.ads ?? 0} ads, ${r.summary?.spend_rows ?? 0} spend rows`,
           ])}
         />
         {runs.length === 0 && <div className="text-sm text-muted">No sync has run yet.</div>}

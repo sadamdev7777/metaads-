@@ -26,12 +26,12 @@ const HINTS: Record<string, string[]> = {
   Korea: ["korea", "seoul", "jeju", "busan"],
   Japan: ["japan", "jepun", "tokyo", "osaka", "hokkaido"],
   Turkiye: ["turki", "turkey", "istanbul", "cappadocia"],
-  Vietnam: ["vietnam", "hanoi", "danang", "da nang", "sapa", "ho chi minh"],
+  Vietnam: ["vietnam", "hanoi", "danang", "da nang", "sapa", "ho chi minh", "phu quoc", "hcm", "dalat"],
   Indonesia: ["indonesia", "bali", "bandung", "jakarta", "medan", "lombok", "padang", "aceh", "jogja", "yogya"],
-  Malaysia: ["malaysia", "sabah", "kundasang", "semporna", "kk", "langkawi", "sarawak", "kota kinabalu"],
-  China: ["china", "beijing", "shanghai", "xinjiang", "chongqing", "guangzhou", "yunnan"],
+  Malaysia: ["malaysia", "sabah", "kundasang", "semporna", "mabul", "kk", "langkawi", "sarawak", "kota kinabalu"],
+  China: ["china", "beijing", "shanghai", "xinjiang", "chongqing", "guangzhou", "yunnan", "xian", "guilin", "chengdu"],
   Thailand: ["thai", "bangkok", "krabi", "phuket", "hatyai", "hat yai"],
-  Europe: ["europe", "eropah", "london", "paris", "swiss", "spain", "sepanyol", "balkan", "uk"],
+  Europe: ["europe", "eropah", "london", "paris", "swiss", "itali", "spain", "sepanyol", "balkan", "uk"],
   Umrah: ["umrah", "umroh", "makkah", "madinah"],
 };
 /** A country suggested from words in the campaign name. Shown as a suggestion only, never saved by itself. */
@@ -112,3 +112,67 @@ export async function syncNow() {
   if (error || !data?.ok) return { ok: false, error: (data?.error as string) || error?.message || "Sync failed." };
   return { ok: true, error: null, data };
 }
+
+/* ---------- Luqman, the night analyst ---------- */
+export type Report = {
+  id: number;
+  created_at: string;
+  summary: string;
+  findings: { title?: string; detail?: string }[];
+  review: { proposal?: string; verdict?: string; detail?: string }[];
+  model: string | null;
+  triggered_by: string | null;
+};
+export type Lesson = { id: number; created_at: string; lesson: string; evidence: string | null; confidence: string | null };
+export type Proposal = {
+  id: string;
+  created_at: string;
+  action_type: string;
+  target: string;
+  reason: string | null;
+  numbers: string | null;
+  expected: string | null;
+  confidence: string | null;
+  status: string;
+  decided_by_email: string | null;
+  decided_at: string | null;
+};
+
+export async function fetchLatestReport(): Promise<Report | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.from("ai_reports").select("*").order("id", { ascending: false }).limit(1).maybeSingle();
+  return (data as Report) ?? null;
+}
+export async function fetchLessons(): Promise<Lesson[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("ai_learnings").select("id, created_at, lesson, evidence, confidence").eq("is_active", true).order("id", { ascending: false }).limit(100);
+  return (data ?? []) as Lesson[];
+}
+export async function removeLesson(id: number, email: string) {
+  if (!supabase) return;
+  await supabase.from("ai_learnings").update({ is_active: false, edited_by_email: email }).eq("id", id);
+}
+export async function fetchProposals(): Promise<Proposal[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("proposals").select("*").eq("is_sample", false).order("created_at", { ascending: false }).limit(60);
+  return (data ?? []) as Proposal[];
+}
+export async function decideProposal(id: string, status: "approved" | "rejected", email: string) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  const { data: me } = await supabase.auth.getUser();
+  const { error } = await supabase.from("proposals").update({ status, decided_by: me.user?.id ?? null, decided_by_email: email, decided_at: new Date().toISOString() }).eq("id", id);
+  return error?.message ?? null;
+}
+export async function pendingCount(): Promise<number> {
+  if (!supabase) return 0;
+  const { count: n } = await supabase.from("proposals").select("id", { count: "exact", head: true }).eq("status", "pending").eq("is_sample", false);
+  return n ?? 0;
+}
+type AnalystResult = { ok: boolean; error?: string; [k: string]: unknown };
+export async function analyst(action: string, extra: Record<string, unknown> = {}): Promise<AnalystResult> {
+  if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
+  const { data, error } = await supabase.functions.invoke("ai-analyst", { body: { action, ...extra } });
+  if (error || !data?.ok) return { ok: false, error: (data?.error as string) || error?.message || "Something went wrong." };
+  return data as AnalystResult;
+}
+export const confTone = (c?: string | null) => (c === "high" ? "g" : c === "medium" ? "a" : "n") as "g" | "a" | "n";

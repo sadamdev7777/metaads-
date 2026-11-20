@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { Avatar, B, Card, PageHead, Pill, Stat, T } from "../components/ui";
 import { STAFF } from "../lib/data";
-import { count, cpl, delivery, rm, rm2, useCampaigns, useMonthTotals, when } from "../lib/live";
+import { useEffect, useState } from "react";
+import { type Report, count, cpl, delivery, fetchLatestReport, pendingCount, rm, rm2, useCampaigns, useMonthTotals, when } from "../lib/live";
 
 const linkBtn = "flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-3.5 text-sm font-semibold text-ink no-underline";
 
@@ -13,6 +14,12 @@ export default function Dashboard() {
   const top = week.data.filter((c) => c.spend > 0).slice(0, 8);
   const today = new Date().toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "short" });
   const failed = t?.last_sync && t.last_sync.ok === false;
+  const [report, setReport] = useState<Report | null>(null);
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    void fetchLatestReport().then(setReport);
+    void pendingCount().then(setPending);
+  }, []);
 
   return (
     <>
@@ -37,6 +44,23 @@ export default function Dashboard() {
             Tag now
           </Link>
         </div>
+      )}
+
+      {report && (
+        <Card
+          title="Luqman's night report"
+          right={<div className="text-[13px] text-muted">{when(report.created_at)}</div>}
+        >
+          <div className="text-[15px] leading-relaxed">{report.summary}</div>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/approvals" className={linkBtn}>
+              {pending > 0 ? `Review ${pending} proposal${pending === 1 ? "" : "s"}` : "Open Approvals"}
+            </Link>
+            <Link to="/ai-office" className={linkBtn}>
+              Read the full report
+            </Link>
+          </div>
+        </Card>
       )}
 
       <div className="flex flex-wrap gap-4">
@@ -77,16 +101,21 @@ export default function Dashboard() {
 
       <Card title="AI staff" right={<Link to="/ai-office" className="text-[13px] font-semibold">Open AI Office</Link>}>
         <div className="grid gap-4 sm:grid-cols-2">
-          {STAFF.map((s) => (
-            <div key={s.who} className="flex items-center gap-3">
-              <Avatar who={s.who} state={s.who === "data" ? "work" : "idle"} size={48} />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold">{s.name}</div>
-                <div className="text-[13px] text-muted">{s.who === "data" ? `Last sync ${when(t?.last_good_sync)}` : s.starts}</div>
+          {STAFF.map((s) => {
+            const on = s.who === "data" || (s.who === "ana" && Boolean(report));
+            return (
+              <div key={s.who} className="flex items-center gap-3">
+                <Avatar who={s.who} state={on ? "work" : "idle"} size={48} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold">
+                    {s.name} <span className="font-normal text-muted">· {s.role}</span>
+                  </div>
+                  <div className="text-[13px] text-muted">{s.who === "data" ? `Last sync ${when(t?.last_good_sync)}` : s.who === "ana" && report ? `Last study ${when(report.created_at)}` : s.starts}</div>
+                </div>
+                <Pill tone={on ? "g" : "n"}>{on ? "Running" : "Not started"}</Pill>
               </div>
-              <Pill tone={s.who === "data" ? "g" : "n"}>{s.who === "data" ? "Running" : "Not started"}</Pill>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
     </>
