@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { B, Btn, Card, PageHead, Pill, RunBy } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { COUNTRIES, type CampaignRow, count, cpl, delivery, guessCountry, guessRunBy, rm, saveTag, syncNow, useCampaigns, useMonthTotals, when } from "../lib/live";
+import { COUNTRIES, type CampaignRow, applySuggestions, count, cpl, delivery, guessCountry, guessRunBy, rm, saveTag, syncNow, useCampaigns, useMonthTotals, when } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -76,6 +76,14 @@ export default function Campaigns() {
     await Promise.all([reload(), totals.reload()]);
   }
 
+  const suggestable = untagged.filter((c) => guessCountry(c.name));
+  async function applyAll() {
+    setBusy(true);
+    const n = await applySuggestions(suggestable, user?.email ?? "");
+    setBusy(false);
+    act(`Applied suggested country and run-by tags to ${n} campaigns`, "Campaigns", `${n} campaign${n === 1 ? "" : "s"} tagged from their names. Check them and fix any that are wrong.`);
+    await reload();
+  }
   const last = totals.data?.last_good_sync;
   return (
     <>
@@ -107,15 +115,22 @@ export default function Campaigns() {
               name has a place in it.
             </div>
           </div>
-          <Btn
-            kind="s"
-            onClick={() => {
-              setShow("Not tagged");
-              setShown(PAGE);
-            }}
-          >
-            Show them
-          </Btn>
+          <div className="flex flex-wrap gap-2">
+            {suggestable.length > 0 && (
+              <Btn disabled={busy} onClick={() => void applyAll()}>
+                Apply {suggestable.length} suggestion{suggestable.length === 1 ? "" : "s"}
+              </Btn>
+            )}
+            <Btn
+              kind="s"
+              onClick={() => {
+                setShow("Not tagged");
+                setShown(PAGE);
+              }}
+            >
+              Show them
+            </Btn>
+          </div>
         </div>
       )}
 

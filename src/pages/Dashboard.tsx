@@ -2,13 +2,14 @@ import { Link } from "react-router-dom";
 import { Avatar, B, Card, PageHead, Pill, Stat, T } from "../components/ui";
 import { STAFF } from "../lib/data";
 import { useEffect, useState } from "react";
-import { type Report, count, cpl, delivery, fetchLatestReport, pendingCount, rm, rm2, useCampaigns, useMonthTotals, when } from "../lib/live";
+import { type Report, count, cpl, delivery, fetchLatestReport, paxLabel, paxTone, pendingCount, perPax, rm, rm2, useCampaigns, useCountryCost, useMonthTotals, when } from "../lib/live";
 
 const linkBtn = "flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-3.5 text-sm font-semibold text-ink no-underline";
 
 export default function Dashboard() {
   const { data: t, error } = useMonthTotals();
   const week = useCampaigns(7);
+  const cost = useCountryCost(30);
   const running = week.data.filter((c) => c.delivery_status === "ACTIVE" || c.spend > 0);
   const untagged = running.filter((c) => !c.country);
   const top = week.data.filter((c) => c.spend > 0).slice(0, 8);
@@ -70,16 +71,20 @@ export default function Dashboard() {
         <Stat label="Active campaigns" value={t ? count(t.active) : "…"} sub={t ? `of ${count(t.campaigns)} in the ad account` : ""} />
       </div>
 
-      <Card title="Cost per pax deposit" right={<Pill tone="a">Waiting for TravelCRM</Pill>}>
-        <div className="text-sm">
-          The RM50 target and RM80 limit need deposits from TravelCRM and leads from the website form. Until both are connected, the system shows Meta's
-          spend and leads only, and does not judge any campaign.
-        </div>
-        <div>
-          <Link to="/settings/integrations" className={`${linkBtn} inline-flex`}>
-            Open Integrations
-          </Link>
-        </div>
+      <Card title="Cost per pax deposit, last 30 days" right={<Link to="/analysis" className="text-[13px] font-semibold">Open Analysis</Link>}>
+        <T
+          minW={560}
+          right={[1, 2, 3]}
+          heads={["Country", "Spend", "Deposit pax", "Cost per pax", ""]}
+          rows={(cost.data?.rows ?? [])
+            .filter((r) => r.spend > 0 && r.country !== "Not tagged")
+            .slice(0, 8)
+            .map((r) => [<B>{r.country}</B>, rm(r.spend), count(r.pax_direct), perPax(r) === null ? "" : rm2(perPax(r)!), <Pill tone={paxTone(perPax(r))}>{paxLabel(perPax(r))}</Pill>])}
+        />
+        {(cost.data?.rows ?? []).filter((r) => r.spend > 0 && r.country !== "Not tagged").length === 0 && (
+          <div className="text-sm">Nothing to show until campaigns are tagged with a country. Open Campaigns and apply the suggestions.</div>
+        )}
+        <div className="text-[13px] text-muted">An estimate by country, target RM50, limit RM80. Deposits from TravelCRM, loaded each night.</div>
       </Card>
 
       <Card title="Top spend, last 7 days" right={<Link to="/analysis" className="text-[13px] font-semibold">Open Analysis</Link>}>

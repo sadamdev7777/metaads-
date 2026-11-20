@@ -21,7 +21,8 @@ How MTB works:
 - One campaign is one tour product (for example "Seoul Korea"). Campaign names usually end with the staff member who runs it.
 - Ad set and ad names describe the creative: PNG is a still image, MP4 is a video, H1/H2 are hooks or versions, and a person's name in an ad set is the talent in the video.
 - The real goal is cost per pax deposit: target RM50, hard limit RM80. Budget is about RM100,000 a month.
-- IMPORTANT: deposit data is not connected yet. You only see Meta's spend, leads, impressions and link clicks. A cheap lead is not proof of a cheap deposit. Say so wherever it matters, and never state or imply a cost per pax.
+- Deposits come from TravelCRM by COUNTRY only ("deposits_by_country"). They are not matched to individual campaigns or ads. So: judge a country against RM50 and RM80 using spend divided by pax_direct, and inside a country judge campaigns, ad sets and ads by cost per lead. Never state a cost per pax for a single campaign, ad set or ad.
+- The country figure is an estimate. pax_direct leaves out bookings that look like agent or staff entries (pax_shared), but still includes repeat customers and other channels, so the true cost from ads is higher than it reads. If "deposits_first_date" is later than the start of the period, pax is undercounted and cost reads too high: say so and do not judge on it. Spend under "Not tagged" belongs to campaigns nobody has given a country yet: it cannot be judged, and tagging them is worth proposing.
 
 Your job each night:
 1. Study the figures. Find what is working and what is wasting money, at campaign, ad set and ad level. Compare creatives inside the same campaign (PNG against MP4, one hook against another, one talent against another).
@@ -142,7 +143,7 @@ Deno.serve(async (req: Request) => {
   const model = cfg.model || pickModel(cfg.models ?? []);
   if (!model) return json({ ok: false, error: "No model chosen. Press Test connection in Settings, Integrations." });
 
-  const [c30, c7, a30, a7, lessons, past, rules] = await Promise.all([
+  const [c30, c7, a30, a7, lessons, past, rules, dep] = await Promise.all([
     admin.rpc("campaign_overview", { p_days: 30 }),
     admin.rpc("campaign_overview", { p_days: 7 }),
     admin.rpc("ad_overview", { p_days: 30, p_limit: 150 }),
@@ -150,13 +151,16 @@ Deno.serve(async (req: Request) => {
     admin.from("ai_learnings").select("lesson, evidence, confidence, created_at").eq("is_active", true).order("id", { ascending: false }).limit(60),
     admin.from("proposals").select("created_at, action_type, target, reason, numbers, expected, status").eq("is_sample", false).order("created_at", { ascending: false }).limit(30),
     admin.from("rules").select("*").limit(1).maybeSingle(),
+    admin.rpc("country_cost", { p_days: 30 }),
   ]);
   const withSpend = (rows: unknown) => (Array.isArray(rows) ? rows : []).filter((r) => Number((r as Row).spend) > 0 || (r as Row).delivery_status === "ACTIVE");
   const cKeep = ["id", "name", "country", "run_by", "delivery_status", "daily_budget", "spend", "leads", "impressions", "clicks"];
   const aKeep = ["id", "campaign", "ad_set", "ad", "status", "spend", "leads", "impressions", "clicks", "days_with_spend"];
   const brief = {
     today_malaysia: new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10),
-    note: "Money is in Malaysian ringgit. Leads are the leads Meta counts. There is no deposit data yet.",
+    note: "Money is in Malaysian ringgit. Leads are the leads Meta counts. Deposits are by country for the last 30 days.",
+    deposits_first_date: (dep.data as Row | null)?.first_booking_date ?? null,
+    deposits_by_country: (dep.data as Row | null)?.rows ?? [],
     rules: rules.data ?? null,
     campaigns_last_30_days: slim(withSpend(c30.data), cKeep),
     campaigns_last_7_days: slim(withSpend(c7.data), cKeep),

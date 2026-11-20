@@ -21,7 +21,7 @@ export type AdSetRow = AdRow & { daily_budget: number | null; ads: AdRow[] };
 export type SyncRun = { started_at: string; finished_at: string | null; ok: boolean | null; error: string | null; triggered_by: string | null };
 export type MonthTotals = { spend: number; leads: number; active: number; campaigns: number; last_sync: SyncRun | null; last_good_sync: string | null };
 
-export const COUNTRIES = ["Korea", "Japan", "Turkiye", "Vietnam", "Indonesia", "Malaysia", "China", "Thailand", "Europe", "Umrah", "Other"];
+export const COUNTRIES = ["Korea", "Japan", "Turkiye", "Vietnam", "Indonesia", "Malaysia", "China", "Taiwan", "Thailand", "India", "Europe", "Umrah", "Other"];
 const HINTS: Record<string, string[]> = {
   Korea: ["korea", "seoul", "jeju", "busan"],
   Japan: ["japan", "jepun", "tokyo", "osaka", "hokkaido"],
@@ -30,6 +30,8 @@ const HINTS: Record<string, string[]> = {
   Indonesia: ["indonesia", "bali", "bandung", "jakarta", "medan", "lombok", "padang", "aceh", "jogja", "yogya"],
   Malaysia: ["malaysia", "sabah", "kundasang", "semporna", "mabul", "kk", "langkawi", "sarawak", "kota kinabalu"],
   China: ["china", "beijing", "shanghai", "xinjiang", "chongqing", "guangzhou", "yunnan", "xian", "guilin", "chengdu"],
+  Taiwan: ["taiwan", "taipei"],
+  India: ["india", "kashmir"],
   Thailand: ["thai", "bangkok", "krabi", "phuket", "hatyai", "hat yai"],
   Europe: ["europe", "eropah", "london", "paris", "swiss", "itali", "spain", "sepanyol", "balkan", "uk"],
   Umrah: ["umrah", "umroh", "makkah", "madinah"],
@@ -176,3 +178,24 @@ export async function analyst(action: string, extra: Record<string, unknown> = {
   return data as AnalystResult;
 }
 export const confTone = (c?: string | null) => (c === "high" ? "g" : c === "medium" ? "a" : "n") as "g" | "a" | "n";
+
+/* ---------- Deposits from TravelCRM, by country ---------- */
+export type CountryCost = { country: string; spend: number; leads: number; bookings: number; pax: number; pax_direct: number; pax_shared: number };
+export type CountryCostData = { first_booking_date: string | null; last_synced: string | null; rows: CountryCost[] };
+export const useCountryCost = (days: number) => useRpc<CountryCostData | null>("country_cost", { p_days: days }, null);
+/** Cost per pax deposit, counting only pax that do not look like agent or staff entries. */
+export const perPax = (c: { spend: number; pax_direct: number }) => (c.pax_direct > 0 && c.spend > 0 ? c.spend / c.pax_direct : null);
+export const paxTone = (v: number | null) => (v === null ? "n" : v > 80 ? "r" : v <= 50 ? "g" : "a") as "n" | "r" | "g" | "a";
+export const paxLabel = (v: number | null) => (v === null ? "No figure" : v > 80 ? "Over RM80" : v <= 50 ? "On target" : "Watch");
+
+export async function applySuggestions(rows: CampaignRow[], email: string) {
+  if (!supabase) return 0;
+  let done = 0;
+  for (const c of rows) {
+    const country = guessCountry(c.name);
+    if (c.country || !country) continue;
+    const { error } = await supabase.from("campaigns").update({ country, run_by: c.run_by ?? guessRunBy(c.name), tagged_by_email: email, updated_at: new Date().toISOString() }).eq("id", c.id);
+    if (!error) done += 1;
+  }
+  return done;
+}
