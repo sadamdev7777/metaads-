@@ -322,18 +322,29 @@ function Destinations() {
           <>
             <div className="px-2 pb-2 text-sm">
               TravelCRM does not say which package these departures belong to. Open one of the bookings in TravelCRM to see the package, then pick the
-              destination here. Biggest first: the top few cover most of the pax. Each one is set once and remembered.
+              destination here. “Likely” is a hint from the nearest departure number we do know (TravelCRM numbers one package's departures in a
+              run): check it before pressing Use. Biggest first. Each one is set once and remembered.
             </div>
             <T
-              minW={720}
+              minW={900}
               right={[1, 2]}
-              heads={["TravelCRM departure", "Bookings", "Pax", "Booking IDs to look up", "Booked", "Destination"]}
+              heads={["TravelCRM departure", "Bookings", "Pax", "Booking IDs to look up", "Booked", "Likely", "Destination"]}
               rows={unknown.data.map((r) => [
                 <B>#{r.departure_id}</B>,
                 count(r.bookings),
                 count(r.pax),
                 r.booking_ids.join(", "),
                 r.first_date === r.last_date ? r.first_date.slice(5) : `${r.first_date.slice(5)} to ${r.last_date.slice(5)}`,
+                r.package_name ? (
+                  <span className="text-[13px] text-muted">Package “{r.package_name}” matches no destination. Add a word for it above.</span>
+                ) : r.suggest_id ? (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <span>{r.suggest_name}</span>
+                    <Btn small kind="s" disabled={savingDep === r.departure_id} onClick={() => void setDep(r.departure_id, r.suggest_id!)}>Use</Btn>
+                  </span>
+                ) : (
+                  <span className="text-muted">No hint</span>
+                ),
                 <select
                   aria-label={`Destination for departure ${r.departure_id}`}
                   value=""

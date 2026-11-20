@@ -346,7 +346,7 @@ export async function fetchPendingProposals(): Promise<Proposal[]> {
 }
 
 /** Departures with deposits whose package TravelCRM does not reveal. A person gives each one a destination by hand. */
-export type UnknownDeparture = { departure_id: number; bookings: number; pax: number; booking_ids: number[]; first_date: string; last_date: string; package_name: string | null };
+export type UnknownDeparture = { departure_id: number; bookings: number; pax: number; booking_ids: number[]; first_date: string; last_date: string; package_name: string | null; suggest_id: string | null; suggest_name: string | null; suggest_gap: number | null };
 export const useUnknownDepartures = () => useRpc<UnknownDeparture[]>("unknown_departures", {}, []);
 export async function setDepartureDestination(departureId: number, destinationId: string | null) {
   if (!supabase) return "Supabase is not connected in this build.";
