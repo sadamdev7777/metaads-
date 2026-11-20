@@ -146,6 +146,7 @@ export type Proposal = {
   decided_at: string | null;
   apply_note: string | null;
   how: string | null;
+  cause: string | null;
 };
 export type AdsAction = { id: number; proposal_id: string | null; kind: string; ok: boolean; undone_at: string | null };
 export type ApplyResult = { ok: boolean; error?: string; note?: string; manual?: boolean; need_budget?: boolean; current?: number; max?: number; name?: string; level?: string };

@@ -34,9 +34,10 @@ Rules for judgement:
 - Do not judge anything on thin data. Under about RM150 of spend or under about 5 leads is too little: say "not enough data" rather than guess.
 - Prefer comparisons inside one campaign over comparisons across countries, because prices and demand differ by destination.
 - Give numbers for every claim, taken from the data. Never invent a figure.
+- Always say WHY, in your own opinion. For every proposal fill \"cause\": your best reading of why this is expensive or cheap, worked out from the data. Work it out step by step: cost per 1,000 impressions (spend / impressions x 1000) tells you if the audience is expensive to reach; click rate (clicks / impressions) tells you if the creative makes people stop and click; clicks per lead (leads / clicks) tells you if the offer, price or form puts people off after they click. Compare each against the other ads in the same campaign, name which of the three is the weak one and give the two numbers side by side. Then add what you think is behind it (for example: tired creative, weak hook, wrong talent, audience too narrow, price or dates not attractive, too many ad sets sharing a small budget). Say plainly when it is your opinion and not proven (\"My guess is...\").
 - Write plain English that a busy marketing executive can act on. No jargon, no filler.
 
-Hand in your work by calling the submit_report tool once. Keep it tight so it is quick to read: at most 6 findings, at most 8 review items, at most 6 lessons, at most 8 proposals, and no field longer than about 60 words.`;
+Hand in your work by calling the submit_report tool once. Keep it tight so it is quick to read: at most 6 findings, at most 8 review items, at most 6 lessons, at most 8 proposals, and no field longer than about 60 words (\"cause\" may run to 80).`;
 
 const REPORT_TOOL = {
   name: "submit_report",
@@ -59,11 +60,12 @@ const REPORT_TOOL = {
             id: { type: ["string", "null"], description: "the id of that campaign or ad from the data, or null" },
             reason: { type: "string", description: "why, in one or two sentences" },
             numbers: { type: "string", description: "the key figures" },
+            cause: { type: "string", description: "your opinion of why this is happening: which of reach cost, click rate or clicks-to-lead is the weak one, with the numbers compared to its siblings, and what you think is behind it" },
             how: { type: "string", description: "exactly what to change, for example the new daily budget in RM" },
             expected: { type: "string", description: "what should happen if this is done" },
             confidence: { type: "string", enum: ["low", "medium", "high"] },
           },
-          required: ["action_type", "level", "target", "reason", "numbers", "how", "expected", "confidence"],
+          required: ["action_type", "level", "target", "reason", "numbers", "cause", "how", "expected", "confidence"],
         },
       },
     },
@@ -260,7 +262,7 @@ Deno.serve(async (req: Request) => {
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const newProposals = list(parsed.proposals).filter((p) => p.target && p.action_type).slice(0, 8).map((p) => ({
     action_type: str(p.action_type, 60), target: str(p.target, 300), reason: str(p.reason, 800), numbers: str(p.numbers, 400),
-    how: str(p.how, 400), expected: str(p.expected, 400), confidence: str(p.confidence, 20), agent: "analyst", status: "pending", report_id: report.id,
+    cause: str(p.cause, 700), how: str(p.how, 400), expected: str(p.expected, 400), confidence: str(p.confidence, 20), agent: "analyst", status: "pending", report_id: report.id,
     entity_level: ["campaign", "ad_set", "ad"].includes(String(p.level)) ? String(p.level) : null,
     entity_id: typeof p.id === "string" && uuid.test(p.id) ? p.id : null, is_sample: false,
   }));

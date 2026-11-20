@@ -101,6 +101,11 @@ export default function Approvals() {
                   <B>{p.numbers}</B>
                 </div>
               )}
+              {p.cause && (
+                <div className="text-sm">
+                  <B>Luqman's view:</B> {p.cause}
+                </div>
+              )}
               {p.how && (
                 <div className="text-sm">
                   <B>What to change:</B> {p.how}

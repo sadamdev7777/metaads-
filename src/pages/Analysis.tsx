@@ -99,6 +99,12 @@ export default function Analysis() {
                         <span className="text-[12px] font-bold uppercase text-muted">Why</span>
                         <div>{r.reason}</div>
                         {r.numbers && <div className="text-[13px] font-semibold">{r.numbers}</div>}
+                        {r.cause && (
+                          <div className="mt-1.5">
+                            <span className="text-[12px] font-bold uppercase text-muted">Luqman's view: what is behind it</span>
+                            <div>{r.cause}</div>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <span className="text-[12px] font-bold uppercase text-muted">What to change</span>
