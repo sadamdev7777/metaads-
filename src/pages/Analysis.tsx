@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { B, Btn, Card, PageHead, Pill, RunBy } from "../components/ui";
+import { ProposalActions } from "../components/ProposalActions";
 import { PERIODS, type AdSetRow, type CampaignRow, type DestCost, type Proposal, type Report, confTone, count, cpl, delivery, fetchLatestReport, fetchPendingProposals, fetchTreeIn, paxLabel, paxTone, perPax, period, rm, rm2, spanText, useCampaignsIn, useDestinationCostIn, useMonthTotals, when } from "../lib/live";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -144,7 +145,7 @@ export default function Analysis() {
               )}
             </div>
             {recs.length === 0 ? (
-              <div className="text-sm text-muted">No open recommendations: they have all been decided.</div>
+              <div className="text-sm text-muted">No open recommendations from Luqman: they have all been decided.</div>
             ) : (
               <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-lg border border-line p-0">
                 {recs.map((r, i) => {
@@ -160,7 +161,7 @@ export default function Analysis() {
                         </span>
                         <span className="flex flex-none flex-col items-end gap-1">
                           <Pill tone={confTone(r.confidence)}>{r.confidence ?? "?"}</Pill>
-                          <span className="text-[12px] text-muted">{isOpen ? "Close" : "Details"}</span>
+                          <span className="text-[12px] font-semibold text-brand">{isOpen ? "Close" : "Decide"}</span>
                         </span>
                       </button>
                       {isOpen && (
@@ -181,6 +182,7 @@ export default function Analysis() {
                             <dd className="m-0 font-semibold">{r.how ?? r.action_type}</dd>
                             {r.expected && <dd className="m-0 mt-0.5 text-[13px]">{r.expected}</dd>}
                           </div>
+                          <ProposalActions p={r} onDone={() => fetchPendingProposals().then(setRecs)} />
                         </dl>
                       )}
                     </li>
@@ -189,8 +191,8 @@ export default function Analysis() {
               </ul>
             )}
             <div className="flex flex-wrap items-center gap-3">
-              <Link to="/approvals" className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
-                Decide in Approvals
+              <Link to="/approvals" className="inline-flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-4 text-sm font-semibold text-ink no-underline">
+                All proposals in Approvals
               </Link>
               <Link to="/ai-office" className="text-sm font-semibold">Full report</Link>
             </div>
