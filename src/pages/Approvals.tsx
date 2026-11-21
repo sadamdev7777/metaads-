@@ -1,28 +1,44 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, B, Btn, Card, PageHead, Pill, T } from "../components/ui";
-import { useAuth } from "../lib/auth";
-import { type AdsAction, type Proposal, adam, confTone, decideProposal, fetchAdsActions, fetchProposals, proposalKind, when, agentOf, findCampaignId, rejectProposal, REJECT_REASONS } from "../lib/live";
+import { ProposalActions } from "../components/ProposalActions";
+import { type AdsAction, type Proposal, adam, confTone, fetchAdsActions, fetchProposals, proposalKind, when, agentOf, findCampaignId } from "../lib/live";
 import { useStore } from "../lib/store";
 
-const INPUT = "min-h-[44px] w-[140px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
-type Confirm = { id: string; budget: string; hint?: string };
+/** Who looks after this page, and what each one does. The first three propose; Adam only acts after a person confirms. */
+const TEAM = [
+  { key: "analyst", who: "ana", name: "Luqman", role: "Results", does: "Studies every ad each night. Proposes what to turn off, raise or fix.", when: "Every night, 02:10" },
+  { key: "budget", who: "bud", name: "Bakri", role: "Budget", does: "Plans the money each morning. Proposes moving budget to what sells.", when: "Every morning, 06:30" },
+  { key: "creative", who: "cre", name: "Anis", role: "Creative", does: "Reviews the ads themselves. Proposes new ads to make.", when: "Monday and Thursday" },
+  { key: "", who: "ads", name: "Adam", role: "Does it in Meta", does: "Makes the pause or budget change in Meta, only after you confirm.", when: "Only when you confirm" },
+] as const;
+
+/** Break a paragraph into short points, one sentence each. Decimals such as RM13.5 stay whole. */
+function points(text?: string | null): string[] {
+  return String(text ?? "")
+    .split(/(?<=[.!?])\s+(?=[A-Z“"(])|;\s+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+function Points({ text, strong }: { text?: string | null; strong?: boolean }) {
+  const list = points(text);
+  if (list.length <= 1) return <div className={strong ? "font-semibold" : ""}>{list[0] ?? ""}</div>;
+  return (
+    <ul className={`m-0 flex list-disc flex-col gap-1 pl-[18px] ${strong ? "font-semibold" : ""}`}>
+      {list.map((x, i) => {
+        const g = /^(My guess|Guess)\s*:/i.exec(x);
+        return <li key={i}>{g ? <><span className="rounded bg-[#FBEFD5] px-1 text-[12px] font-bold text-[#5C3900]">A guess</span> {x.slice(g[0].length).trim()}</> : x}</li>;
+      })}
+    </ul>
+  );
+}
+const Label = ({ children }: { children: string }) => <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-muted">{children}</div>;
 
 export default function Approvals() {
-  const { user } = useAuth();
   const { act } = useStore();
   const navigate = useNavigate();
-  const [rejecting, setRejecting] = useState<{ id: string; reason: string } | null>(null);
-  async function reject(p: Proposal) {
-    setBusy(true);
-    const reason = rejecting?.reason.trim() ?? "";
-    const err = await rejectProposal(p.id, reason);
-    setBusy(false);
-    if (err) return act(`Could not reject: ${p.target}`, "Approvals", err);
-    setRejecting(null);
-    act(`Rejected: ${p.action_type} for ${p.target}${reason ? ` (${reason})` : ""}`, "Approvals", reason ? "Rejected. Your reason is in the AI staff's notebook, so they learn from it." : "Rejected.");
-    await load();
-  }
+  const [who, setWho] = useState("");
+  const [openId, setOpenId] = useState("");
   async function makeAd(p: Proposal) {
     const id = await findCampaignId(String(p.target ?? "").split(">")[0].trim());
     if (!id) return act(`Could not find the campaign for ${p.target}`, "Approvals", "The campaign named in this brief was not found. Open it from Campaigns and add the ad there.");
@@ -32,7 +48,6 @@ export default function Approvals() {
   const [actions, setActions] = useState<AdsAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<Confirm | null>(null);
   const load = async () => {
     const [p, a] = await Promise.all([fetchProposals(), fetchAdsActions()]);
     setList(p);
@@ -46,35 +61,8 @@ export default function Approvals() {
 
   const pending = list.filter((p) => p.status === "pending");
   const decided = list.filter((p) => p.status !== "pending").slice(0, 40);
-
-  async function record(p: Proposal, status: "approved" | "rejected") {
-    setBusy(true);
-    const err = await decideProposal(p.id, status, user?.email ?? "");
-    setBusy(false);
-    setConfirm(null);
-    if (err) return act(`Could not record a decision on: ${p.target}`, "Approvals", err);
-    act(`${status === "approved" ? "Approved (record only)" : "Rejected"}: ${p.action_type} for ${p.target}`, "Approvals", status === "approved" ? "Approved and recorded. Nothing was changed in Meta." : "Rejected.");
-    await load();
-  }
-
-  async function apply(p: Proposal) {
-    setBusy(true);
-    const kind = proposalKind(p.action_type);
-    const r = await adam({ action: "apply", proposal_id: p.id, ...(kind === "budget" && confirm?.budget ? { new_daily_budget: Number(confirm.budget) } : {}) });
-    setBusy(false);
-    if (r.need_budget) {
-      setConfirm({ id: p.id, budget: confirm?.budget ?? "", hint: `${r.error} Current daily budget of “${r.name}”: RM${r.current}. Most allowed in one step: RM${r.max}.` });
-      return;
-    }
-    if (!r.ok) {
-      act(`Adam could not apply: ${p.action_type} for ${p.target}`, "Approvals", r.error ?? "Failed.");
-      if (r.manual) setConfirm({ id: p.id, budget: "", hint: r.error });
-      return;
-    }
-    setConfirm(null);
-    act(`Applied in Meta: ${p.action_type} for ${p.target}`, "Approvals", r.note ?? "Done in Meta.");
-    await load();
-  }
+  const count = (k: string) => pending.filter((p) => (p.agent ?? "analyst") === k).length;
+  const shown = who ? pending.filter((p) => (p.agent ?? "analyst") === who) : pending;
 
   async function undo(a: AdsAction, p: Proposal) {
     setBusy(true);
@@ -86,130 +74,116 @@ export default function Approvals() {
 
   return (
     <>
-      <PageHead title="Approvals" sub={loading ? "Loading…" : pending.length ? `${pending.length} proposal${pending.length === 1 ? "" : "s"} from the AI staff.` : "Nothing pending."} />
+      <PageHead title="Approvals" sub={loading ? "Loading…" : pending.length ? `${pending.length} proposal${pending.length === 1 ? "" : "s"} waiting for your decision.` : "Nothing waiting."} />
 
-      <div className="rounded-xl bg-[#E6F1EE] px-5 py-4 text-sm">
-        <B>Nothing changes in Meta until you say so.</B> For a pause or a budget change, Adam can make the change in Meta the moment you confirm. For
-        anything else, approving only records your decision. Luqman checks the result the next night and learns from it. Bakri's are budget
-        moves, Anis's are new creatives to make.
-      </div>
+      <Card title="Who works on this page">
+        <div className="text-sm">
+          <B>4 AI staff.</B> Three of them propose, one carries out. Nothing changes in Meta until you confirm.
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {TEAM.map((t) => {
+            const n = t.key ? count(t.key) : 0;
+            const on = Boolean(t.key) && who === t.key;
+            const inner = (
+              <>
+                <Avatar who={t.who} state={n ? "wait" : "idle"} size={40} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="text-[15px] font-bold text-ink">{t.name}</span>
+                    <span className="text-[12px] font-semibold text-brand">{t.role}</span>
+                    {t.key && <span className={`ml-auto rounded-full px-2 py-0.5 text-[12px] font-bold ${n ? "bg-[#FBEFD5] text-[#5C3900]" : "bg-ground text-muted"}`}>{n} waiting</span>}
+                  </span>
+                  <span className="mt-0.5 block text-[13px] leading-snug text-ink">{t.does}</span>
+                  <span className="mt-0.5 block text-[12px] text-muted">{t.when}</span>
+                </span>
+              </>
+            );
+            const box = `flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left ${on ? "border-brand bg-[#E6F1EE]" : "border-line bg-white"}`;
+            return t.key ? (
+              <button key={t.name} type="button" aria-pressed={on} onClick={() => setWho(on ? "" : t.key)} className={box}>
+                {inner}
+              </button>
+            ) : (
+              <div key={t.name} className={`${box} bg-ground`}>
+                {inner}
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-[12px] text-muted">{who ? <>Showing only {agentOf(who).name}'s proposals. <button type="button" onClick={() => setWho("")} className="border-0 bg-transparent p-0 text-[12px] font-semibold text-brand underline">Show all</button></> : "Tap a name to see only that person's proposals."}</div>
+      </Card>
 
-      {!loading && pending.length === 0 && (
-        <Card title="No proposals waiting">
-          <div className="text-sm">Luqman studies the ads every night at 02:10, Bakri plans the budget at 06:30, and Anis reviews creatives on Monday and Thursday. Their proposals wait here.</div>
+      {!loading && shown.length === 0 && (
+        <Card title={who ? `Nothing waiting from ${agentOf(who).name}` : "No proposals waiting"}>
+          <div className="text-sm">New proposals appear here after each of them finishes their next round.</div>
         </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {pending.map((p) => {
-          const kind = proposalKind(p.action_type);
-          const open = confirm?.id === p.id;
-          return (
-            <Card key={p.id}>
-              <div className="flex items-center justify-between gap-2">
-                <Pill tone="a">{p.action_type}</Pill>
-                <div className="flex items-center gap-2 text-[13px] text-muted">
-                  <Avatar who={agentOf(p.agent).who} state="wait" size={28} />
-                  {agentOf(p.agent).name}, {when(p.created_at)}
-                </div>
-              </div>
-              <div className="text-base font-bold">{p.target}</div>
-              <div className="text-sm">{p.reason}</div>
-              {p.numbers && (
-                <div className="text-[13px]">
-                  <B>{p.numbers}</B>
-                </div>
-              )}
-              {p.cause && (
-                <div className="text-sm">
-                  <B>{agentOf(p.agent).name}'s view:</B> {p.cause}
-                </div>
-              )}
-              {p.how && (
-                <div className="text-sm">
-                  <B>What to change:</B> {p.how}
-                </div>
-              )}
-              {p.expected && <div className="text-[13px] text-muted">Expected: {p.expected}</div>}
-              <div>
-                <Pill tone={confTone(p.confidence)}>Confidence: {p.confidence ?? "not stated"}</Pill>
-              </div>
-
-              {open ? (
-                <div className="flex flex-col gap-3 rounded-lg bg-[#FBEFD5] px-3 py-3">
-                  <div className="text-sm font-bold text-[#5C3900]">
-                    {kind === "pause" ? "Adam will turn this off in Meta now." : kind === "budget" ? "Adam will change this daily budget in Meta now." : "This one cannot be done automatically."}
-                  </div>
-                  {kind === "budget" && (
-                    <div className="flex flex-col gap-1.5">
-                      <label htmlFor={`b-${p.id}`} className="text-[13px] font-semibold">
-                        New daily budget (RM)
-                      </label>
-                      <input id={`b-${p.id}`} inputMode="decimal" value={confirm.budget} onChange={(e) => setConfirm({ ...confirm, budget: e.target.value.replace(/[^0-9.]/g, "") })} className={INPUT} />
+      {shown.length > 0 && (
+        <Card title={`Waiting for you (${shown.length})`}>
+          <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-lg border border-line p-0">
+            {shown.map((p) => {
+              const isOpen = openId === p.id;
+              const a = agentOf(p.agent);
+              const kind = proposalKind(p.action_type);
+              return (
+                <li key={p.id}>
+                  <button type="button" aria-expanded={isOpen} onClick={() => setOpenId(isOpen ? "" : p.id)} className="flex w-full items-start gap-2.5 border-0 bg-transparent px-3 py-3 text-left">
+                    <Avatar who={a.who} state="wait" size={32} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] text-muted">
+                        {a.name} · {when(p.created_at)}
+                      </span>
+                      <span className="block text-[13px] font-bold text-[#8A5300]">{p.action_type}</span>
+                      <span className="block break-words text-[15px] font-bold leading-snug text-ink">{p.target}</span>
+                      {!isOpen && <span className="mt-0.5 block text-[13px] text-muted">{points(p.reason)[0]}</span>}
+                    </span>
+                    <span className="flex flex-none flex-col items-end gap-1">
+                      <Pill tone={confTone(p.confidence)}>{p.confidence ?? "?"}</Pill>
+                      <span className="text-[12px] font-semibold text-brand">{isOpen ? "Close" : "Open"}</span>
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="flex flex-col gap-3 px-3 pb-4 text-sm sm:pl-[54px]">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <Label>Why</Label>
+                          <Points text={p.reason} />
+                        </div>
+                        {p.numbers && (
+                          <div>
+                            <Label>The numbers</Label>
+                            <Points text={p.numbers} />
+                          </div>
+                        )}
+                      </div>
+                      {p.cause && (
+                        <div>
+                          <Label>{`${a.name}'s view`}</Label>
+                          <Points text={p.cause} />
+                        </div>
+                      )}
+                      <div className="rounded-lg bg-[#E6F1EE] px-3 py-2.5">
+                        <Label>What to do</Label>
+                        <Points text={p.how ?? p.action_type} strong />
+                        {p.expected && (
+                          <div className="mt-2 border-t border-[#C5DDD6] pt-2 text-[13px]">
+                            <B>Expected:</B> {p.expected}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-[12px] text-muted">
+                        Confidence {p.confidence ?? "not stated"} · {p.agent === "creative" ? "You create the ad" : kind === "manual" ? "You make this change yourself" : "Adam can do this in Meta"}
+                      </div>
+                      <ProposalActions p={p} onDone={load} onMake={p.agent === "creative" ? () => void makeAd(p) : undefined} />
                     </div>
                   )}
-                  {confirm.hint && <div className="text-[13px]">{confirm.hint}</div>}
-                  <div className="text-[13px]">A pause can be undone from this page. Both are recorded under your name.</div>
-                  <div className="flex flex-wrap gap-2">
-                    {kind !== "manual" && (
-                      <Btn disabled={busy || (kind === "budget" && !confirm.budget)} onClick={() => void apply(p)}>
-                        {busy ? "Working…" : "Yes, change it in Meta"}
-                      </Btn>
-                    )}
-                    <Btn kind="s" disabled={busy} onClick={() => void record(p, "approved")}>
-                      Approve, I'll do it myself
-                    </Btn>
-                    <Btn kind="s" disabled={busy} onClick={() => setConfirm(null)}>
-                      Cancel
-                    </Btn>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {p.agent === "creative" ? (
-                    <Btn className="flex-1" disabled={busy} onClick={() => void makeAd(p)}>
-                      Create this ad…
-                    </Btn>
-                  ) : (
-                    <Btn className="flex-1" disabled={busy} onClick={() => (kind === "manual" ? void record(p, "approved") : setConfirm({ id: p.id, budget: "" }))}>
-                      {kind === "manual" ? "Approve" : "Approve…"}
-                    </Btn>
-                  )}
-                  <Btn className="flex-1" kind="s" disabled={busy} onClick={() => setRejecting(rejecting?.id === p.id ? null : { id: p.id, reason: "" })}>
-                    Reject…
-                  </Btn>
-                </div>
-              )}
-              {rejecting?.id === p.id && (
-                <div className="flex flex-col gap-2 rounded-lg bg-ground px-3 py-3">
-                  <label htmlFor={`rj-${p.id}`} className="text-[13px] font-semibold">
-                    Why? {agentOf(p.agent).name} reads this and learns from it. You can leave it empty.
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {REJECT_REASONS.map((r) => (
-                      <button key={r} type="button" onClick={() => setRejecting({ id: p.id, reason: r })} className={`min-h-[36px] rounded-full border px-3 text-[13px] ${rejecting.reason === r ? "border-brand bg-[#E6F1EE] font-semibold" : "border-line bg-white"}`}>
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea id={`rj-${p.id}`} rows={2} value={rejecting.reason} onChange={(e) => setRejecting({ id: p.id, reason: e.target.value })} placeholder="Or write your own reason" className="w-full rounded-lg border border-[#9AA39E] bg-white px-3 py-2 text-[15px]" />
-                  <div className="flex gap-2">
-                    <Btn small disabled={busy} onClick={() => void reject(p)}>
-                      {busy ? "Working…" : "Reject"}
-                    </Btn>
-                    <Btn small kind="s" disabled={busy} onClick={() => setRejecting(null)}>
-                      Cancel
-                    </Btn>
-                  </div>
-                </div>
-              )}
-              <div className="text-xs text-muted">
-                {p.agent === "creative" ? "Opens the campaign with Anis's text filled in. You choose the video or picture; the ad is created paused." : kind === "manual" ? "Record only: make this change yourself in Ads Manager." : "Adam can make this change in Meta after you confirm."}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       {decided.length > 0 && (
         <Card title="Decided earlier">

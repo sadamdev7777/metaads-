@@ -10,7 +10,7 @@ const INPUT = "min-h-[44px] w-full max-w-[220px] rounded-lg border border-[#9AA3
  * Approve or reject one proposal, wherever it is shown. A pause or a budget change is made in Meta by Adam
  * after a confirm step; anything else is only recorded. A rejection can carry a reason the AI staff learn from.
  */
-export function ProposalActions({ p, onDone }: { p: Proposal; onDone: () => void | Promise<void> }) {
+export function ProposalActions({ p, onDone, onMake }: { p: Proposal; onDone: () => void | Promise<void>; onMake?: () => void }) {
   const { user } = useAuth();
   const { act } = useStore();
   const kind = proposalKind(p.action_type);
@@ -62,14 +62,20 @@ export function ProposalActions({ p, onDone }: { p: Proposal; onDone: () => void
       {mode === "" && (
         <>
           <div className="flex flex-wrap gap-2">
-            <Btn small disabled={busy} onClick={() => (kind === "manual" ? void recordOnly() : setMode("approve"))}>
-              {kind === "manual" ? "Approve" : "Approve…"}
-            </Btn>
+            {onMake ? (
+              <Btn small disabled={busy} onClick={onMake}>
+                Create this ad…
+              </Btn>
+            ) : (
+              <Btn small disabled={busy} onClick={() => (kind === "manual" ? void recordOnly() : setMode("approve"))}>
+                {kind === "manual" ? "Approve" : "Approve…"}
+              </Btn>
+            )}
             <Btn small kind="s" disabled={busy} onClick={() => setMode("reject")}>
               Reject…
             </Btn>
           </div>
-          <div className="text-[12px] text-muted">{kind === "manual" ? "Approve only records your decision: make this change yourself." : "Adam makes this change in Meta after you confirm."}</div>
+          <div className="text-[12px] text-muted">{onMake ? "Opens the campaign with the text filled in. You choose the video or picture. The ad is created paused." : kind === "manual" ? "Approve only records your decision: make this change yourself." : "Adam makes this change in Meta after you confirm."}</div>
         </>
       )}
 
