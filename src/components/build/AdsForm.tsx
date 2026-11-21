@@ -15,8 +15,8 @@ export const fromSource = (s: SourceAd, w: WinAd | undefined, d: Defaults): AdDr
 });
 
 /** The ads of the new ad set: copy the best ones, or make new ones with your own words or Mira's. */
-export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk, creativeError, onNote }: {
-  ads: AdDraft[]; set: (ads: AdDraft[]) => void; winners: WinAd[]; media: MediaItem[]; destId: string; defaults: Defaults; creativeOk: boolean; creativeError: string; onNote: (text: string) => void;
+export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk, onNote }: {
+  ads: AdDraft[]; set: (ads: AdDraft[]) => void; winners: WinAd[]; media: MediaItem[]; destId: string; defaults: Defaults; creativeOk: boolean; onNote: (text: string) => void;
 }) {
   const [loading, setLoading] = useState("");
   const [more, setMore] = useState(false);
@@ -36,7 +36,7 @@ export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk
 
   return (
     <>
-      {!creativeOk && <div className="rounded-lg bg-[#FBE6E3] px-3 py-2.5 text-[13px] text-[#7A1A14]">{creativeError}</div>}
+      {!creativeOk && <div className="rounded-lg bg-[#FBE6E3] px-3 py-2.5 text-[13px] text-[#7A1A14]">You can prepare the ads now. Meta will refuse to create them until the Page access is fixed (see the note at the top).</div>}
 
       <div className="flex flex-col gap-2">
         <div className="text-[13px] font-semibold">Add one of the best ads {destId ? "for this destination" : "in the account"} (last 30 days, cheapest leads first)</div>
@@ -71,7 +71,7 @@ export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk
       </div>
 
       {ads.map((ad, i) => (
-        <AdCard key={ad.key} ad={ad} n={i + 1} media={media} destId={destId} winners={winners} creativeOk={creativeOk} onNote={onNote} patch={(p) => patch(ad.key, p)}
+        <AdCard key={ad.key} ad={ad} n={i + 1} media={media} destId={destId} winners={winners} onNote={onNote} patch={(p) => patch(ad.key, p)}
           remove={() => set(ads.filter((a) => a.key !== ad.key))}
           duplicate={() => set([...ads.slice(0, i + 1), { ...ad, key: uid(), name: `${ad.name} copy`, mode: ad.mode === "reuse" && (ad.image_hash || ad.video_id) ? "same" : ad.mode }, ...ads.slice(i + 1)])} />
       ))}
@@ -79,8 +79,8 @@ export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk
   );
 }
 
-function AdCard({ ad, n, media, destId, winners, creativeOk, patch, remove, duplicate, onNote }: {
-  ad: AdDraft; n: number; media: MediaItem[]; destId: string; winners: WinAd[]; creativeOk: boolean; patch: (p: Partial<AdDraft>) => void; remove: () => void; duplicate: () => void; onNote: (t: string) => void;
+function AdCard({ ad, n, media, destId, winners, patch, remove, duplicate, onNote }: {
+  ad: AdDraft; n: number; media: MediaItem[]; destId: string; winners: WinAd[]; patch: (p: Partial<AdDraft>) => void; remove: () => void; duplicate: () => void; onNote: (t: string) => void;
 }) {
   const [all, setAll] = useState(false);
   const [mira, setMira] = useState(false);
@@ -133,7 +133,6 @@ function AdCard({ ad, n, media, destId, winners, creativeOk, patch, remove, dupl
         </div>
       )}
       <Seg label="What this ad uses" value={ad.mode} options={modes} onChange={(v) => patch({ mode: v })} />
-      {edit && !creativeOk && <div className="rounded-lg bg-[#FBE6E3] px-3 py-2 text-[13px] text-[#7A1A14]">This choice needs the Page permission to be fixed first. “Use the ad as it is” works now.</div>}
 
       {ad.mode !== "library" ? (
         <div className="flex items-center gap-3">

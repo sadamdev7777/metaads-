@@ -8,7 +8,7 @@ import { Fld, INPUT, Part, Seg, Step, money } from "../components/build/parts";
 import { useAuth } from "../lib/auth";
 import {
   ATTRIBUTION, BIDS, type Build, EVENTS, GOALS, OBJECTIVES, type Options, type SourceAd, type SourceSet, type WinSet, type Winners,
-  audienceFrom, audienceLine, blankBuild, builder, dm, loadSaved, problems, saveLocal, staffName, standardAudience,
+  PAGE_FIX, audienceFrom, audienceLine, blankBuild, builder, dm, loadSaved, problems, saveLocal, staffName, standardAudience,
 } from "../lib/build";
 import { type Destination, type MediaItem, adCreate, cpl, fetchDestinations, fetchMedia, rm, seatsFor, useCampaigns, useRpc } from "../lib/live";
 import { useStore } from "../lib/store";
@@ -70,7 +70,7 @@ export default function CampaignBuild() {
   const bid = cbo && !existing ? b.c.bid_strategy : b.s.bid_strategy;
   const creativeOk = opts?.creative_ok !== false;
   const defaults = { link: opts?.identity?.link ?? "", cta: opts?.identity?.cta ?? "CONTACT_US", url_tags: opts?.identity?.url_tags ?? "" };
-  const issues = problems(b, creativeOk, cbo);
+  const issues = problems(b, cbo);
   const upC = (p: Partial<Build["c"]>) => setB((x) => ({ ...x, c: { ...x.c, ...p } }));
   const upS = (p: Partial<Build["s"]>) => setB((x) => ({ ...x, s: { ...x.s, ...p } }));
 
@@ -235,6 +235,7 @@ export default function CampaignBuild() {
           <button type="button" onClick={() => setNote("")} className="border-0 bg-transparent p-0 text-sm font-semibold text-[#7A1A14] underline">Close</button>
         </div>
       )}
+      {!creativeOk && <div role="alert" className="rounded-xl bg-[#FBE6E3] px-4 py-3 text-sm text-[#7A1A14]"><B>One thing to fix in Meta first.</B> {PAGE_FIX}</div>}
       {run.error && <div role="alert" className="rounded-xl bg-[#FBE6E3] px-4 py-3 text-sm text-[#7A1A14]"><B>Not created.</B> {run.error}</div>}
 
       {/* ---------- 1. Start ---------- */}
@@ -432,7 +433,7 @@ export default function CampaignBuild() {
 
       {/* ---------- 4. Ads ---------- */}
       <Step n={existing ? 3 : 4} title="Ads: media and words" summary={sum4} open={open === 4} done={b.ads.length > 0 && issues.every((i) => i.step !== 4)} onToggle={() => setOpen(open === 4 ? 0 : 4)}>
-        <AdsForm ads={b.ads} set={(list) => setB((x) => ({ ...x, ads: list }))} winners={ads.length ? ads : win.data.ads} media={media} destId={b.dest} defaults={defaults} creativeOk={creativeOk} creativeError={opts?.creative_error ?? ""} onNote={setNote} />
+        <AdsForm ads={b.ads} set={(list) => setB((x) => ({ ...x, ads: list }))} winners={ads.length ? ads : win.data.ads} media={media} destId={b.dest} defaults={defaults} creativeOk={creativeOk} onNote={setNote} />
         <div><Btn onClick={() => setOpen(5)}>Next: check and create</Btn></div>
       </Step>
 
@@ -456,6 +457,7 @@ export default function CampaignBuild() {
           <div className="rounded-lg bg-[#FBEFD5] px-3 py-2 text-[13px]"><B>RM{budgetNow} a day</B> is more than three times MTB's usual RM{USUAL_BUDGET}. Make sure that is what you mean.</div>
         )}
         {b.ads.some((a) => a.mode !== "reuse") && <div className="rounded-lg bg-ground px-3 py-2 text-[13px]">Prices and dates in your ad text are not checked against TravelCRM. Read them once more before you create.</div>}
+        {!creativeOk && <div className="rounded-lg bg-[#FBE6E3] px-3 py-2 text-[13px] text-[#7A1A14]">The campaign and ad set will be created, but Meta will refuse the ads until the Page access is fixed. After fixing it, press Try again beside each ad on the next screen.</div>}
         {issues.length > 0 ? (
           <div className="flex flex-col gap-1.5 rounded-lg bg-[#FBE6E3] px-3 py-3 text-sm text-[#7A1A14]">
             <B>Still to fill in:</B>

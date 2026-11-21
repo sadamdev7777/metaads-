@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabase";
+import { PAGE_FIX } from "./build";
 
 export type CampaignRow = {
   id: string;
@@ -403,7 +404,9 @@ export async function adCreate(body: Record<string, unknown>): Promise<AdTemplat
   if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
   const { data, error } = await supabase.functions.invoke("ad-create", { body });
   if (error && !data) return { ok: false, error: error.message };
-  return (data ?? { ok: false, error: "No answer." }) as AdTemplate;
+  const out = (data ?? { ok: false, error: "No answer." }) as AdTemplate & { page_permission?: boolean };
+  if (!out.ok && (out.page_permission || /advertiser permission on the Page|create posts for Page/i.test(out.error ?? ""))) out.error = PAGE_FIX;
+  return out;
 }
 /** The brief behind one of Anis's proposals: campaign, hook and the full ad text from her review. */
 export async function fetchBrief(proposalId: string): Promise<{ target: string; hook: string; text: string; concept: string } | null> {

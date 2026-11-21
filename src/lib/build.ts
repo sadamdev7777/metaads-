@@ -180,7 +180,7 @@ export function audienceLine(a: Audience): string {
 }
 
 /** What still stops this form from being sent, in the order of the steps. Empty means ready. */
-export function problems(b: Build, creativeOk: boolean, cbo: boolean): { step: number; text: string }[] {
+export function problems(b: Build, cbo: boolean): { step: number; text: string }[] {
   const out: { step: number; text: string }[] = [];
   if (b.where === "existing" && !b.campaign_id) out.push({ step: 1, text: "Choose the campaign to add the ad set to." });
   if (b.where === "new" && !b.c.name.trim()) out.push({ step: 2, text: "Give the campaign a name." });
@@ -199,7 +199,6 @@ export function problems(b: Build, creativeOk: boolean, cbo: boolean): { step: n
     const n = ad.name.trim() || `Ad ${i + 1}`;
     if (!ad.name.trim()) out.push({ step: 4, text: `Ad ${i + 1}: give it a name.` });
     if (ad.mode === "reuse") return;
-    if (!creativeOk) out.push({ step: 4, text: `${n}: new words or new media cannot be created until the Page permission is fixed. Use the ad as it is, or fix the permission.` });
     if (!ad.message.trim()) out.push({ step: 4, text: `${n}: write the ad text.` });
     if (!/^https:\/\//.test(ad.link.trim())) out.push({ step: 4, text: `${n}: the link must start with https://.` });
     if (ad.mode === "library" && !ad.media_id) out.push({ step: 4, text: `${n}: choose a picture or video.` });
@@ -224,3 +223,7 @@ export const saveLocal = (b: Build | null) => {
     /* storage is a convenience only */
   }
 };
+
+/** Said wherever Meta refuses an ad because the connected token has no advertiser access to the Facebook Page. */
+export const PAGE_FIX =
+  "Meta will not let this connection create ads for the Facebook Page yet. A campaign and its ad set can be created, but every ad is refused until this is fixed. In Meta Business Settings, under Accounts, Pages, open the Page and give the person or system user whose token is connected here the “Create ads” access. Do the same for the Instagram account.";
