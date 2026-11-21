@@ -80,7 +80,7 @@ export default function CampaignNew() {
 
   return (
     <>
-      <PageHead title="New campaign" sub="Step 3. Copy a campaign that worked, or ask Mira for a draft. Either way the campaign is created paused: nothing spends until someone turns it on in Ads Manager." />
+      <PageHead title="Duplicate a campaign" sub="Copies a whole campaign as it is, with every ad set and ad, under a new name. It is created paused. To choose the settings and ads yourself, use Run campaign." right={<Link to="/campaigns/new" className="flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] bg-white px-4 text-sm font-semibold text-ink no-underline">Run campaign</Link>} />
 
       {busy && <div role="status" className="rounded-xl bg-[#FBEFD5] px-5 py-3 text-sm font-semibold">{busy}</div>}
 

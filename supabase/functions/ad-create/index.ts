@@ -88,103 +88,137 @@ Deno.serve(async (req: Request) => {
     return (pool[0] as { id: string; name: string; meta_ad_id: string } | undefined) ?? null;
   };
 
+  const CTAS = ["CONTACT_US", "LEARN_MORE", "BOOK_TRAVEL", "SIGN_UP", "GET_QUOTE", "GET_OFFER", "APPLY_NOW", "SHOP_NOW", "SUBSCRIBE", "DOWNLOAD"];
   try {
-    const tplAd = await pickTemplate();
-    if (!tplAd) return json({ ok: false, error: "This campaign has no ad yet to copy the page, link and button from. Create its first ad in Ads Manager." });
-    const tpl = await template(String(tplAd.meta_ad_id));
+    // The Run campaign page names the page itself; elsewhere the page, link and button come from an ad that already runs.
+    const ownPage = String(body.page_id ?? "").trim();
+    const reuseId = String(body.creative_id ?? "").trim();
+    const direct = body.action === "create" && (ownPage !== "" || reuseId !== "");
+    const tplAd = direct ? null : await pickTemplate();
+    if (!direct && !tplAd) return json({ ok: false, error: "This campaign has no ad yet to copy the page, link and button from. Create its first ad from Run campaign." });
+    const tpl = tplAd ? await template(String(tplAd.meta_ad_id)) : null;
 
     /* ---------- Show what would be copied, so the form can be filled in ---------- */
     if (body.action === "template") {
-      return json({ ok: true, template_ad_id: tplAd.id, template_ad: tplAd.name, kind: tpl.kind, message: tpl.message, title: tpl.title, link: tpl.link, cta: tpl.cta });
+      return json({ ok: true, template_ad_id: tplAd!.id, template_ad: tplAd!.name, kind: tpl!.kind, message: tpl!.message, title: tpl!.title, link: tpl!.link, cta: tpl!.cta });
     }
     if (body.action !== "create") return json({ ok: false, error: "Unknown action." }, 400);
 
     const name = String(body.name ?? "").trim().slice(0, 120);
-    const message = String(body.message ?? "").trim();
-    const title = String(body.title ?? "").trim().slice(0, 250);
-    const link = String(body.link ?? "").trim() || tpl.link;
     if (!name) return json({ ok: false, error: "Give the ad a name." });
-    if (!message) return json({ ok: false, error: "Write the ad text." });
-    if (!/^https:\/\//.test(link)) return json({ ok: false, error: "The ad needs a link that starts with https://." });
-    const { data: media } = await admin.from("media").select("*").eq("id", String(body.media_id ?? "")).maybeSingle();
-    if (!media?.file_path) return json({ ok: false, error: "Choose a picture or video from Media." });
-    const isVideo = String(media.mime_type ?? "").startsWith("video/") || media.format === "MP4";
+    let creativeId = reuseId;
+    let mediaRow: Row | null = null;
+    let how = reuseId ? "same ad as before" : "";
 
-    // 1. Put the picture or video in the ad account (once: its Meta id is remembered on the media row).
-    let imageHash = String(media.meta_image_hash ?? "");
-    let videoId = String(media.meta_video_id ?? "");
-    let thumb = "";
-    if (isVideo) {
-      if (!videoId) {
-        const signed = await admin.storage.from("media").createSignedUrl(media.file_path, 3600);
-        if (signed.error || !signed.data?.signedUrl) throw new Error("Could not read the video from storage.");
-        const up = await post(`act_${account}/advideos`, { file_url: signed.data.signedUrl, name: String(media.file_name ?? name).slice(0, 100) });
-        videoId = String(up.id ?? "");
-        if (!videoId) throw new Error("Meta did not accept the video.");
-        await admin.from("media").update({ meta_video_id: videoId }).eq("id", media.id);
-      }
-      // Meta needs a little time to process a video before it can be used in an ad.
-      let ready = false;
-      for (let i = 0; i < 22 && !ready; i++) {
-        const v = await get(`${videoId}?fields=status,picture,thumbnails{uri,is_preferred}`);
-        const state = String(((v.status ?? {}) as Row).video_status ?? "");
-        if (state === "error") throw new Error("Meta could not process this video. Check the file (MP4, under 4 GB) and upload it again.");
-        const thumbs = (((v.thumbnails ?? {}) as Row).data ?? []) as Row[];
-        thumb = String((thumbs.find((t) => t.is_preferred) ?? thumbs[0] ?? {}).uri ?? v.picture ?? "");
-        ready = state === "ready" && thumb !== "";
-        if (!ready) await sleep(5000);
-      }
-      if (!ready) return json({ ok: false, pending: true, error: "Meta is still processing the video. Wait a minute and press Create again: the video will not be uploaded twice." });
-    } else if (!imageHash) {
-      const file = await admin.storage.from("media").download(media.file_path);
-      if (file.error || !file.data) throw new Error("Could not read the picture from storage.");
-      const bytes = new Uint8Array(await file.data.arrayBuffer());
-      if (bytes.length > 8_000_000) return json({ ok: false, error: "The picture is larger than 8 MB. Upload a smaller copy." });
-      const up = await post(`act_${account}/adimages`, { bytes: encodeBase64(bytes) });
-      const first = Object.values((up.images ?? {}) as Record<string, Row>)[0];
-      imageHash = String(first?.hash ?? "");
-      if (!imageHash) throw new Error("Meta did not accept the picture.");
-      await admin.from("media").update({ meta_image_hash: imageHash }).eq("id", media.id);
-    }
+    if (!creativeId) {
+      const message = String(body.message ?? "").trim();
+      const title = String(body.title ?? "").trim().slice(0, 250);
+      const description = String(body.description ?? "").trim().slice(0, 250);
+      const link = String(body.link ?? "").trim() || tpl?.link || "";
+      const cta = CTAS.includes(String(body.cta ?? "")) ? String(body.cta) : tpl?.cta ?? "LEARN_MORE";
+      const urlTags = typeof body.url_tags === "string" ? body.url_tags.trim().slice(0, 500) : tpl?.url_tags ?? "";
+      const pageId = ownPage || String(tpl?.spec.page_id ?? "");
+      const igId = ownPage ? String(body.instagram_user_id ?? "").trim() : String(tpl?.spec.instagram_user_id ?? "");
+      if (!message) return json({ ok: false, error: "Write the ad text." });
+      if (!/^https:\/\//.test(link)) return json({ ok: false, error: "The ad needs a link that starts with https://." });
+      if (!pageId) return json({ ok: false, error: "The Facebook Page for this ad is not known." });
 
-    // 2. The creative: same page, Instagram account, link and button as the ad it copies; new words and media.
-    const story: Row = { page_id: tpl.spec.page_id };
-    if (tpl.spec.instagram_user_id) story.instagram_user_id = tpl.spec.instagram_user_id;
-    if (isVideo) story.video_data = { video_id: videoId, title, message, image_url: thumb, call_to_action: { type: tpl.cta, value: { link, link_caption: tpl.caption || link } } };
-    else story.link_data = { link, message, name: title, caption: tpl.caption || link, image_hash: imageHash, call_to_action: { type: tpl.cta, value: { link } } };
-    const creativeFields: Record<string, string> = { name: `${name} ${new Date().toISOString().slice(0, 10)}`, object_story_spec: JSON.stringify(story) };
-    if (tpl.url_tags) creativeFields.url_tags = tpl.url_tags;
-    let creative: Row;
-    try {
-      creative = await post(`act_${account}/adcreatives`, tpl.features ? { ...creativeFields, degrees_of_freedom_spec: JSON.stringify(tpl.features) } : creativeFields);
-    } catch (e) {
-      if (!tpl.features) throw e;
-      creative = await post(`act_${account}/adcreatives`, creativeFields); // the copied enhancement settings did not fit this format
+      // 1. The picture or video: one already in the ad account, or one from the Media library (uploaded once).
+      let imageHash = String(body.image_hash ?? "").trim();
+      let videoId = String(body.video_id ?? "").trim();
+      let thumb = "";
+      let isVideo = videoId !== "";
+      if (!imageHash && !videoId) {
+        const { data: media } = await admin.from("media").select("*").eq("id", String(body.media_id ?? "")).maybeSingle();
+        if (!media?.file_path) return json({ ok: false, error: "Choose a picture or video from Media." });
+        mediaRow = media;
+        isVideo = String(media.mime_type ?? "").startsWith("video/") || media.format === "MP4";
+        imageHash = String(media.meta_image_hash ?? "");
+        videoId = String(media.meta_video_id ?? "");
+        if (isVideo) {
+          if (!videoId) {
+            const signed = await admin.storage.from("media").createSignedUrl(media.file_path, 3600);
+            if (signed.error || !signed.data?.signedUrl) throw new Error("Could not read the video from storage.");
+            const up = await post(`act_${account}/advideos`, { file_url: signed.data.signedUrl, name: String(media.file_name ?? name).slice(0, 100) });
+            videoId = String(up.id ?? "");
+            if (!videoId) throw new Error("Meta did not accept the video.");
+            await admin.from("media").update({ meta_video_id: videoId }).eq("id", media.id);
+          }
+          imageHash = "";
+          // Meta needs a little time to process a video before it can be used in an ad.
+          let ready = false;
+          for (let i = 0; i < 22 && !ready; i++) {
+            const v = await get(`${videoId}?fields=status,picture,thumbnails{uri,is_preferred}`);
+            const state = String(((v.status ?? {}) as Row).video_status ?? "");
+            if (state === "error") throw new Error("Meta could not process this video. Check the file (MP4, under 4 GB) and upload it again.");
+            const thumbs = (((v.thumbnails ?? {}) as Row).data ?? []) as Row[];
+            thumb = String((thumbs.find((t) => t.is_preferred) ?? thumbs[0] ?? {}).uri ?? v.picture ?? "");
+            ready = state === "ready" && thumb !== "";
+            if (!ready) await sleep(5000);
+          }
+          if (!ready) return json({ ok: false, pending: true, error: "Meta is still processing the video. Wait a minute and press Create again: the video will not be uploaded twice." });
+        } else if (!imageHash) {
+          const file = await admin.storage.from("media").download(media.file_path);
+          if (file.error || !file.data) throw new Error("Could not read the picture from storage.");
+          const bytes = new Uint8Array(await file.data.arrayBuffer());
+          if (bytes.length > 8_000_000) return json({ ok: false, error: "The picture is larger than 8 MB. Upload a smaller copy." });
+          const up = await post(`act_${account}/adimages`, { bytes: encodeBase64(bytes) });
+          const first = Object.values((up.images ?? {}) as Record<string, Row>)[0];
+          imageHash = String(first?.hash ?? "");
+          if (!imageHash) throw new Error("Meta did not accept the picture.");
+          await admin.from("media").update({ meta_image_hash: imageHash }).eq("id", media.id);
+        }
+        how = `media: ${media.file_name}`;
+      } else how = "media already in the ad account";
+
+      // 2. The creative: the page it runs under, the words, the link and the button.
+      const story: Row = { page_id: pageId };
+      if (igId) story.instagram_user_id = igId;
+      if (isVideo) {
+        const video: Row = { video_id: videoId, title, message, call_to_action: { type: cta, value: { link, link_caption: tpl?.caption || link } } };
+        if (description) video.link_description = description;
+        if (thumb) video.image_url = thumb; else if (imageHash) video.image_hash = imageHash;
+        story.video_data = video;
+      } else {
+        const data: Row = { link, message, name: title, caption: tpl?.caption || link, image_hash: imageHash, call_to_action: { type: cta, value: { link } } };
+        if (description) data.description = description;
+        story.link_data = data;
+      }
+      const creativeFields: Record<string, string> = { name: `${name} ${new Date().toISOString().slice(0, 10)}`, object_story_spec: JSON.stringify(story) };
+      if (urlTags) creativeFields.url_tags = urlTags;
+      let creative: Row;
+      try {
+        creative = await post(`act_${account}/adcreatives`, tpl?.features ? { ...creativeFields, degrees_of_freedom_spec: JSON.stringify(tpl.features) } : creativeFields);
+      } catch (e) {
+        if (!tpl?.features) throw e;
+        creative = await post(`act_${account}/adcreatives`, creativeFields); // the copied enhancement settings did not fit this format
+      }
+      creativeId = String(creative.id ?? "");
+      if (!creativeId) throw new Error("Meta did not return the new creative.");
     }
-    const creativeId = String(creative.id ?? "");
-    if (!creativeId) throw new Error("Meta did not return the new creative.");
 
     // 3. The ad itself, paused.
     const ad = await post(`act_${account}/ads`, { name, adset_id: String(adSet.meta_adset_id), creative: JSON.stringify({ creative_id: creativeId }), status: "PAUSED" });
     const metaAdId = String(ad.id ?? "");
     if (!metaAdId) throw new Error("Meta did not return the new ad.");
 
-    const { data: row } = await admin.from("ads").insert({ meta_ad_id: metaAdId, ad_set_id: adSet.id, name, media_id: media.id, delivery_status: "PAUSED", synced_at: new Date().toISOString(), is_sample: false }).select("id").single();
+    const { data: row } = await admin.from("ads").insert({ meta_ad_id: metaAdId, ad_set_id: adSet.id, name, media_id: mediaRow?.id ?? null, delivery_status: "PAUSED", synced_at: new Date().toISOString(), is_sample: false }).select("id").single();
     const proposalId = typeof body.proposal_id === "string" && body.proposal_id ? body.proposal_id : null;
     await admin.from("ads_actions").insert({
       proposal_id: proposalId, kind: "create", level: "ad", entity_id: row?.id ?? null, meta_id: metaAdId, entity_name: `${adSet.name} > ${name}`,
-      before: {}, after: { status: "PAUSED", creative_id: creativeId, copied_from: tplAd.name, media: media.file_name }, ok: true, by_email: email,
+      before: {}, after: { status: "PAUSED", creative_id: creativeId, copied_from: tplAd?.name ?? String(body.copied_from ?? "") ?? null, how }, ok: true, by_email: email,
     });
     if (proposalId) {
       await admin.from("proposals").update({ status: "applied", decided_by: who.user.id, decided_by_email: email, decided_at: new Date().toISOString(), applied_at: new Date().toISOString(), apply_note: `Created ad “${name}” in ${adSet.name}, paused.` }).eq("id", proposalId).in("status", ["pending", "approved"]);
     }
-    await admin.from("activity_log").insert({ user_id: who.user.id, user_email: email, action: `Created ad “${name}” in ad set “${adSet.name}” in Meta, paused`, area: "Approvals" });
+    await admin.from("activity_log").insert({ user_id: who.user.id, user_email: email, action: `Created ad “${name}” in ad set “${adSet.name}” in Meta, paused`, area: "Run campaign" });
     return json({ ok: true, ad_id: row?.id ?? null, meta_ad_id: metaAdId, note: `Created “${name}” in Meta, paused. Check it, then turn it on.` });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (body.action === "create") {
       await admin.from("ads_actions").insert({ kind: "create", level: "ad", entity_id: null, meta_id: String(adSet.meta_adset_id), entity_name: `${adSet.name} > ${String(body.name ?? "")}`, before: {}, after: {}, ok: false, error: message, by_email: email });
     }
+    if (/page permission|create posts for Page/i.test(message)) return json({ ok: false, page_permission: true, error: "Meta refused: the connection is not allowed to make new ads for the Facebook Page. In Meta Business Settings, give the user or system user behind the token the “Create ads” permission on the Page, then press Create again. Using an existing ad as it is still works." });
     return json({ ok: false, error: /permission|not authorized|\(#10\)|\(#200\)/i.test(message) ? `The Meta token is not allowed to create ads: ${message}` : message });
   }
 });

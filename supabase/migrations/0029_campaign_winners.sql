@@ -1,0 +1,2 @@
+-- Applied through the Supabase connector. See the function public.campaign_winners(p_days):
+-- the best ads and ad sets of the last p_days, cheapest proven leads first, for the Run campaign page.
