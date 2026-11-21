@@ -1,0 +1,2 @@
+-- proposals.decision_note and reject_proposal(id, reason): a rejection's reason is stored and added to the
+-- shared notebook (agent "staff"). Applied on 2026-11-22 as "reject_with_reason" (full definition there).

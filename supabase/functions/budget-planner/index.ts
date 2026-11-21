@@ -26,6 +26,8 @@ Rules:
 - Move money in steps of at most 30% a day for any one campaign. Never propose spending above the monthly budget.
 - Deposits with no destination ("Unknown") hide real pax. If they are large, say your plan is less certain.
 - Every proposal must name a real campaign or ad set from the data, with its id when you have it, and say exactly what the new daily amount should be.
+- "luqman_pending" lists what Luqman, the night analyst, already proposed and nobody has decided yet. Do not propose a change for a campaign or ad set he already covers: one campaign gets one proposal. Say in your summary where you agree or disagree with him, and use your proposals for campaigns he left out.
+- "notebook" includes reasons staff gave when they rejected a proposal (lessons starting "Staff rejected"). Follow them: do not propose again what staff turned down for a reason that still holds.
 - Give numbers for every claim. Never invent a figure. Plain English, no jargon.
 
 Hand in your work by calling submit_plan once: summary first, then proposals (most valuable first, at most 6), then the allocation table. Keep it short: no field over 40 words, and at most 15 allocation rows (destinations with spend only).`;
@@ -100,14 +102,15 @@ Deno.serve(async (req: Request) => {
   if (!model) return json({ ok: false, error: "No model chosen. Press Test connection in Settings, Integrations." });
 
   const day = (back: number) => new Date(Date.now() + 8 * 3600000 - back * 86400000).toISOString().slice(0, 10);
-  const [d14, d7, camps, deps, dests, totals, lessons] = await Promise.all([
+  const [d14, d7, camps, deps, dests, totals, lessons, luqman] = await Promise.all([
     admin.rpc("destination_cost_range", { p_from: day(13), p_to: day(0) }),
     admin.rpc("destination_cost_range", { p_from: day(6), p_to: day(0) }),
     admin.rpc("campaign_overview_range", { p_from: day(6), p_to: day(0) }),
     admin.from("crm_departures").select("destination_id, departure_date, seats_available").not("package_name", "is", null).gte("departure_date", day(0)).order("departure_date").limit(1000),
     admin.from("destinations").select("id, name"),
     admin.rpc("dashboard_totals"),
-    admin.from("ai_learnings").select("lesson, confidence").eq("is_active", true).order("id", { ascending: false }).limit(25),
+    admin.from("ai_learnings").select("lesson, confidence").eq("is_active", true).order("id", { ascending: false }).limit(40),
+    admin.from("proposals").select("action_type, target, how").eq("status", "pending").eq("agent", "analyst").eq("is_sample", false).limit(12),
   ]);
   const destName = new Map(((dests.data ?? []) as Row[]).map((d) => [String(d.id), String(d.name)]));
   const seats: Record<string, { departures: number; seats_left: number; nearly_full: number; seats_unknown: number; next_dates: string[] }> = {};
@@ -134,6 +137,7 @@ Deno.serve(async (req: Request) => {
     destinations_last_7_days: keep((d7.data as Row | null)?.rows, dKeys),
     seats_by_destination: seats,
     campaigns_last_7_days: keep(((camps.data ?? []) as Row[]).filter((c) => Number(c.spend) > 0 || c.delivery_status === "ACTIVE"), ["id", "name", "destination", "delivery_status", "daily_budget", "spend", "leads"]),
+    luqman_pending: luqman.data ?? [],
     notebook: lessons.data ?? [],
   };
   if (brief.campaigns_last_7_days.length === 0) return json({ ok: false, error: "There is no ad data yet. Run a Meta sync first." });

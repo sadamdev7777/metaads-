@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { B, Btn, Card, PageHead, Pill } from "../components/ui";
-import { type AdRow, type AdSetRow, type ManagedCampaign, type MediaItem, PERIODS, adCreate, adam, count, cpl, delivery, fetchBrief, fetchManaged, fetchMedia, period, rm, spanText } from "../lib/live";
+import { type AdRow, type AdSetRow, type ManagedCampaign, type MediaItem, PERIODS, PREVIEW_FORMATS, adCreate, adPreview, adam, count, cpl, delivery, fetchBrief, fetchManaged, fetchMedia, period, rm, seatsFor, spanText } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -22,6 +22,12 @@ export default function CampaignManage() {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState("");
   const [brief, setBrief] = useState<{ hook: string; text: string; concept: string } | null>(null);
+  const [view, setView] = useState<{ id: string; format: string; src: string; note: string } | null>(null);
+  async function preview(adId: string, format = "MOBILE_FEED_STANDARD") {
+    setView({ id: adId, format, src: "", note: "Asking Meta for the preview…" });
+    const r = await adPreview(adId, format);
+    setView({ id: adId, format, src: r.ok ? r.src ?? "" : "", note: r.ok ? "" : r.error ?? "No preview." });
+  }
   const load = () => fetchManaged(id, range).then(setData);
   useEffect(() => {
     setData(null);
@@ -183,9 +189,26 @@ export default function CampaignManage() {
                     </div>
                     <div className="text-[13px] text-muted">{figures(a)}</div>
                   </div>
-                  <Toggle level="ad" row={a} />
+                  <span className="flex flex-wrap gap-2">
+                    <Btn small kind="s" onClick={() => (view?.id === a.id ? setView(null) : void preview(a.id))}>{view?.id === a.id ? "Hide preview" : "Preview"}</Btn>
+                    <Toggle level="ad" row={a} />
+                  </span>
                 </div>
                 <Confirm level="ad" rowId={a.id} />
+                {view?.id === a.id && (
+                  <div className="mt-2 flex flex-col gap-2 rounded-lg bg-ground p-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      {PREVIEW_FORMATS.map((f) => (
+                        <button key={f.key} type="button" onClick={() => void preview(a.id, f.key)} className={`min-h-[36px] rounded-full border px-3 text-[13px] ${view.format === f.key ? "border-brand bg-[#E6F1EE] font-semibold" : "border-line bg-white"}`}>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    {view.note && <div className="text-sm">{view.note}</div>}
+                    {view.src && <iframe title={`Preview of ${a.name}`} src={view.src} sandbox="allow-scripts allow-same-origin" className="h-[640px] w-full max-w-[380px] rounded-lg border border-line bg-white" />}
+                    <div className="text-[12px] text-muted">Drawn by Meta. A new ad may show as blank for a minute while Meta prepares it.</div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -208,6 +231,9 @@ function AddAd({ adSet, destinationId, brief, briefId, onDone }: { adSet: AdSetR
   const [link, setLink] = useState("");
   const [note, setNote] = useState("Reading the settings to copy from Meta…");
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState("");
+  const [seats, setSeats] = useState<{ departures: number; seats: number; unknown: number; next: string | null } | null>(null);
+  const [sure, setSure] = useState(false);
 
   async function readTemplate(templateAdId?: string) {
     setNote("Reading the settings to copy from Meta…");
@@ -217,12 +243,14 @@ function AddAd({ adSet, destinationId, brief, briefId, onDone }: { adSet: AdSetR
     setTplName(t.template_ad ?? "");
     setTitle((v) => v || t.title || "");
     setText((v) => v || brief?.text || t.message || "");
+    setCopied(t.message ?? "");
     setLink(t.link ?? "");
     setNote("");
   }
   useEffect(() => {
     void fetchMedia().then(setMedia);
     void readTemplate();
+    if (destinationId) void seatsFor(destinationId).then(setSeats);
   }, [adSet.id]);
 
   const shown = media.filter((m) => all || !destinationId || m.destination_id === destinationId);
@@ -231,6 +259,18 @@ function AddAd({ adSet, destinationId, brief, briefId, onDone }: { adSet: AdSetR
   useEffect(() => {
     if (chosen && !name) setName(`${chosen.format ?? "AD"} ${today}`);
   }, [mediaId]);
+
+  // Things worth a second look before the ad goes to Meta. They warn; they do not block.
+  const prices = Array.from(new Set(text.match(/RM\s?[\d,]+(?:\.\d+)?/g) ?? []));
+  const warnings: string[] = [];
+  if (prices.length) warnings.push(`The text quotes ${prices.join(", ")}. Check it against the price in TravelCRM today.`);
+  if (/\[HARGA\]|\[[A-Z ]{3,}\]/.test(text)) warnings.push("The text still has a placeholder in square brackets. Fill it in.");
+  if (!brief?.text && copied && text.trim() === copied.trim()) warnings.push("The text is exactly the same as the ad it was copied from. If only the picture or video is new, that is fine.");
+  if (seats && seats.departures > 0 && seats.unknown === 0 && seats.seats <= 5) warnings.push(`Only ${seats.seats} seat${seats.seats === 1 ? "" : "s"} left across the ${seats.departures} coming departure${seats.departures === 1 ? "" : "s"} we know of for this destination. A new ad may sell seats that are not there.`);
+  if (!destinationId) warnings.push("This campaign has no destination, so its spend is not counted anywhere. Set it on the Campaigns page.");
+  if (name.trim() && !/^(MP4|PNG|JPG|VID|IMG)\b/i.test(name.trim())) warnings.push("Ad names usually start with MP4 or PNG (for example “MP4 H3”), so Luqman and Anis can compare formats.");
+  if (text.length > 0 && text.length < 80) warnings.push("The text is very short for an MTB ad.");
+  useEffect(() => setSure(false), [text, name, mediaId]);
 
   async function create() {
     setBusy(true);
@@ -300,9 +340,22 @@ function AddAd({ adSet, destinationId, brief, briefId, onDone }: { adSet: AdSetR
         <input id={`l-${adSet.id}`} value={link} onChange={(e) => setLink(e.target.value)} inputMode="url" className={`${INPUT} font-normal`} />
       </label>
 
+      {warnings.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-lg bg-[#FBEFD5] px-3 py-3 text-sm">
+          <B>Check before you create</B>
+          <ul className="m-0 flex list-disc flex-col gap-1 pl-5">
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+          <label className="mt-1 flex items-start gap-2 font-semibold">
+            <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} className="mt-1" /> I have checked these.
+          </label>
+        </div>
+      )}
       {note && <div className="rounded-lg bg-white px-3 py-2.5 text-sm">{note}</div>}
       <div className="flex flex-wrap gap-2">
-        <Btn disabled={busy || !mediaId || !name.trim() || !text.trim() || !from} onClick={() => void create()}>
+        <Btn disabled={busy || !mediaId || !name.trim() || !text.trim() || !from || (warnings.length > 0 && !sure)} onClick={() => void create()}>
           {busy ? "Working…" : "Create in Meta, paused"}
         </Btn>
       </div>

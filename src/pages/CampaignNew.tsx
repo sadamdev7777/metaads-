@@ -37,6 +37,14 @@ export default function CampaignNew() {
     const c = camps.data.find((x) => x.id === id);
     setCopy({ source: id, name: c ? `${c.destination ?? c.name.replace(/\s+\d{1,2}\/\d{1,2}.*$/, "")} ${today()} - ${mine}` : "", budget: c?.daily_budget ? String(c.daily_budget) : "" });
   }
+  // Quick start: name a destination and the system picks its best campaign to copy.
+  function pickDestination(destId: string) {
+    const pool = sources.filter((c) => c.destination_id === destId);
+    const judged = pool.filter((c) => c.leads >= 5).sort((x, y) => x.spend / x.leads - y.spend / y.leads);
+    const best = judged[0] ?? [...pool].sort((x, y) => y.spend - x.spend)[0];
+    if (best) pickSource(best.id);
+    else act("No campaign to copy for that destination", "New campaign", "That destination has no campaign with spend in the last 30 days. Choose a campaign to copy yourself.");
+  }
   async function addCopy() {
     const c = camps.data.find((x) => x.id === copy.source);
     if (!c || !copy.name.trim()) return;
@@ -79,6 +87,16 @@ export default function CampaignNew() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Copy a campaign">
           <div className="text-sm">Pick one that worked. The system copies its ad sets, targeting and ads under a new name.</div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cq" className="text-[13px] font-semibold">Quick start: destination</label>
+            <select id="cq" value="" onChange={(e) => e.target.value && pickDestination(e.target.value)} className={INPUT}>
+              <option value="">Choose a destination…</option>
+              {dests.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            <div className="text-xs text-muted">Picks that destination's campaign with the cheapest leads and fills in the name and budget for you.</div>
+          </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="cs" className="text-[13px] font-semibold">Campaign to copy</label>
             <select id="cs" value={copy.source} onChange={(e) => pickSource(e.target.value)} className={INPUT}>

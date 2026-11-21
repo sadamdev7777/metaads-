@@ -425,3 +425,33 @@ export async function findCampaignId(name: string): Promise<string | null> {
   const { data } = await supabase.from("campaigns").select("id").eq("name", name).eq("is_sample", false).limit(2);
   return data?.length === 1 ? String(data[0].id) : null;
 }
+
+/** Reject a proposal. A reason, when given, goes into the AI staff's shared notebook so they learn from it. */
+export async function rejectProposal(id: string, reason: string) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  const { error } = await supabase.rpc("reject_proposal", { p_id: id, p_reason: reason });
+  return error?.message ?? null;
+}
+export const REJECT_REASONS = ["Too early, give it more days", "The numbers look wrong", "We are changing the creative instead", "Seats are nearly full", "Price or dates are about to change", "Already done in Ads Manager"];
+
+/** How an ad looks on Facebook or Instagram, as Meta draws it. Returns the address of Meta's own preview frame. */
+export const PREVIEW_FORMATS: { key: string; label: string }[] = [
+  { key: "MOBILE_FEED_STANDARD", label: "Facebook feed" },
+  { key: "INSTAGRAM_STANDARD", label: "Instagram feed" },
+  { key: "INSTAGRAM_REELS", label: "Instagram Reels" },
+  { key: "INSTAGRAM_STORY", label: "Instagram Story" },
+];
+export async function adPreview(adId: string, format: string): Promise<{ ok: boolean; src?: string; error?: string }> {
+  if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
+  const { data, error } = await supabase.functions.invoke("ad-preview", { body: { ad_id: adId, format } });
+  if (error && !data) return { ok: false, error: error.message };
+  return data ?? { ok: false, error: "No answer." };
+}
+/** Seats left on the coming departures of one destination, for the check before an ad is created. */
+export async function seatsFor(destinationId: string): Promise<{ departures: number; seats: number; unknown: number; next: string | null }> {
+  if (!supabase) return { departures: 0, seats: 0, unknown: 0, next: null };
+  const today = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+  const { data } = await supabase.from("crm_departures").select("departure_date, seats_available").eq("destination_id", destinationId).not("package_name", "is", null).gte("departure_date", today).order("departure_date").limit(200);
+  const rows = (data ?? []) as { departure_date: string; seats_available: number | null }[];
+  return { departures: rows.length, seats: rows.reduce((n, r) => n + (r.seats_available ?? 0), 0), unknown: rows.filter((r) => r.seats_available == null).length, next: rows[0]?.departure_date ?? null };
+}

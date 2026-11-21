@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, B, Btn, Card, PageHead, Pill, T } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { type AdsAction, type Proposal, adam, confTone, decideProposal, fetchAdsActions, fetchProposals, proposalKind, when, agentOf, findCampaignId } from "../lib/live";
+import { type AdsAction, type Proposal, adam, confTone, decideProposal, fetchAdsActions, fetchProposals, proposalKind, when, agentOf, findCampaignId, rejectProposal, REJECT_REASONS } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] w-[140px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -12,6 +12,17 @@ export default function Approvals() {
   const { user } = useAuth();
   const { act } = useStore();
   const navigate = useNavigate();
+  const [rejecting, setRejecting] = useState<{ id: string; reason: string } | null>(null);
+  async function reject(p: Proposal) {
+    setBusy(true);
+    const reason = rejecting?.reason.trim() ?? "";
+    const err = await rejectProposal(p.id, reason);
+    setBusy(false);
+    if (err) return act(`Could not reject: ${p.target}`, "Approvals", err);
+    setRejecting(null);
+    act(`Rejected: ${p.action_type} for ${p.target}${reason ? ` (${reason})` : ""}`, "Approvals", reason ? "Rejected. Your reason is in the AI staff's notebook, so they learn from it." : "Rejected.");
+    await load();
+  }
   async function makeAd(p: Proposal) {
     const id = await findCampaignId(String(p.target ?? "").split(">")[0].trim());
     if (!id) return act(`Could not find the campaign for ${p.target}`, "Approvals", "The campaign named in this brief was not found. Open it from Campaigns and add the ad there.");
@@ -164,9 +175,32 @@ export default function Approvals() {
                       {kind === "manual" ? "Approve" : "Approve…"}
                     </Btn>
                   )}
-                  <Btn className="flex-1" kind="s" disabled={busy} onClick={() => void record(p, "rejected")}>
-                    Reject
+                  <Btn className="flex-1" kind="s" disabled={busy} onClick={() => setRejecting(rejecting?.id === p.id ? null : { id: p.id, reason: "" })}>
+                    Reject…
                   </Btn>
+                </div>
+              )}
+              {rejecting?.id === p.id && (
+                <div className="flex flex-col gap-2 rounded-lg bg-ground px-3 py-3">
+                  <label htmlFor={`rj-${p.id}`} className="text-[13px] font-semibold">
+                    Why? {agentOf(p.agent).name} reads this and learns from it. You can leave it empty.
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {REJECT_REASONS.map((r) => (
+                      <button key={r} type="button" onClick={() => setRejecting({ id: p.id, reason: r })} className={`min-h-[36px] rounded-full border px-3 text-[13px] ${rejecting.reason === r ? "border-brand bg-[#E6F1EE] font-semibold" : "border-line bg-white"}`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea id={`rj-${p.id}`} rows={2} value={rejecting.reason} onChange={(e) => setRejecting({ id: p.id, reason: e.target.value })} placeholder="Or write your own reason" className="w-full rounded-lg border border-[#9AA39E] bg-white px-3 py-2 text-[15px]" />
+                  <div className="flex gap-2">
+                    <Btn small disabled={busy} onClick={() => void reject(p)}>
+                      {busy ? "Working…" : "Reject"}
+                    </Btn>
+                    <Btn small kind="s" disabled={busy} onClick={() => setRejecting(null)}>
+                      Cancel
+                    </Btn>
+                  </div>
                 </div>
               )}
               <div className="text-xs text-muted">
