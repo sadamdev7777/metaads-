@@ -66,7 +66,9 @@ export default function Campaigns() {
     // the country with the most spend first.
     const spendOf = new Map<string, number>();
     for (const c of kept) spendOf.set(c.country ?? "", (spendOf.get(c.country ?? "") ?? 0) + c.spend);
-    return [...kept].sort((a, b) => Number(Boolean(a.country)) - Number(Boolean(b.country)) || (spendOf.get(b.country ?? "") ?? 0) - (spendOf.get(a.country ?? "") ?? 0) || (a.country ?? "").localeCompare(b.country ?? "") || b.spend - a.spend);
+    const regionSpend = new Map<string, number>();
+    for (const c of kept) regionSpend.set(c.destination_id ?? "", (regionSpend.get(c.destination_id ?? "") ?? 0) + c.spend);
+    return [...kept].sort((a, b) => Number(Boolean(a.country)) - Number(Boolean(b.country)) || (spendOf.get(b.country ?? "") ?? 0) - (spendOf.get(a.country ?? "") ?? 0) || (a.country ?? "").localeCompare(b.country ?? "") || (regionSpend.get(b.destination_id ?? "") ?? 0) - (regionSpend.get(a.destination_id ?? "") ?? 0) || (a.destination ?? "").localeCompare(b.destination ?? "") || b.spend - a.spend);
   }, [data, show, country, runBy, q]);
 
   // One card per country: what is running, and which of its regions have no ad.
@@ -228,11 +230,16 @@ export default function Campaigns() {
                 const cell = "border-b border-line px-3 py-3 align-top text-sm";
                 const head = i === 0 || (arr[i - 1].country ?? "") !== (c.country ?? "");
                 const group = rows.filter((x) => (x.country ?? "") === (c.country ?? ""));
+                const subHead = Boolean(c.country) && (head || (arr[i - 1].destination_id ?? "") !== (c.destination_id ?? ""));
+                const region = rows.filter((x) => (x.destination_id ?? "") === (c.destination_id ?? "") && (x.country ?? "") === (c.country ?? ""));
+                const regionName = !c.destination ? "No region" : c.destination.toLowerCase() === (c.country ?? "").toLowerCase() ? "Whole country" : c.destination.replace(new RegExp(`^${c.country}\\s*[-–:]\\s*`, "i"), "");
+                const regionLeads = region.reduce((n, x) => n + x.leads, 0);
+                const regionSpent = region.reduce((n, x) => n + x.spend, 0);
                 return (
                   <Fragment key={c.id}>
                   {head && (
                     <tr>
-                      <td colSpan={9} className="border-b border-line bg-[#F1F4F1] px-3 py-2 text-sm">
+                      <td colSpan={9} className="border-b border-line bg-[#F1F4F1] px-3 py-2.5 text-[15px]">
                         <B>{c.country ?? "Not matched to a destination"}</B>{" "}
                         <span className="text-muted">
                           · {count(group.length)} campaign{group.length === 1 ? "" : "s"}, {count(group.filter((x) => x.delivery_status === "ACTIVE").length)} running · {rm(group.reduce((n, x) => n + x.spend, 0))}
@@ -240,8 +247,19 @@ export default function Campaigns() {
                       </td>
                     </tr>
                   )}
+                  {subHead && (
+                    <tr>
+                      <td colSpan={9} className="border-b border-line bg-white px-3 pb-1.5 pt-3 text-[13px]">
+                        <span className="font-bold text-brand">{regionName}</span>{" "}
+                        <span className="text-muted">
+                          · {count(region.length)} campaign{region.length === 1 ? "" : "s"}, {count(region.filter((x) => x.delivery_status === "ACTIVE").length)} running · {rm(regionSpent)}
+                          {regionLeads ? ` · ${count(regionLeads)} leads · ${cpl(regionSpent, regionLeads)} each` : ""}
+                        </span>
+                      </td>
+                    </tr>
+                  )}
                   <tr>
-                    <td className={cell}>
+                    <td className={cell} style={c.country ? { paddingLeft: 24 } : undefined}>
                       <Link to={`/campaigns/${c.id}`} className="font-bold">{c.name}</Link>
                       <Mini>
                         {c.spend ? rm(c.spend) : "No spend"}
