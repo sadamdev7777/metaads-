@@ -1,0 +1,2 @@
+-- tag_package(package_name, destination): the package's name (without number and year) becomes a word on
+-- that destination, then everything is re-matched. Applied on 2026-11-22 as "tag_package".

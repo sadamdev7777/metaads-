@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useEffect } from "react";
 import { type CampaignRow, type Destination, count, cpl, delivery, PERIODS, fetchDestinations, guessRunBy, period, rm, saveTag, syncNow, useCampaignsIn, useMonthTotals, when, spanText } from "../lib/live";
 import { useStore } from "../lib/store";
+import { DestPicker } from "../components/DestPicker";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 const PAGE = 50;
@@ -47,7 +48,7 @@ export default function Campaigns() {
   const people = useMemo(() => Array.from(new Set(data.map((c) => c.run_by).filter(Boolean) as string[])).sort(), [data]);
   const rows = useMemo(() => {
     const text = q.trim().toLowerCase();
-    return data.filter((c) => {
+    const kept = data.filter((c) => {
       if (show === "Active or with spend" && !(c.delivery_status === "ACTIVE" || c.spend > 0)) return false;
       if (show === "Active only" && c.delivery_status !== "ACTIVE") return false;
       if (show === "Not tagged" && c.destination_id) return false;
@@ -55,6 +56,8 @@ export default function Campaigns() {
       if (runBy !== "Everyone" && c.run_by !== runBy) return false;
       return !text || c.name.toLowerCase().includes(text);
     });
+    // Campaigns with no destination come first, so they are the first thing to fix.
+    return [...kept].sort((a, b) => Number(Boolean(a.destination_id)) - Number(Boolean(b.destination_id)));
   }, [data, show, country, runBy, q]);
 
   const relevant = data.filter((c) => c.delivery_status === "ACTIVE" || c.spend > 0);
@@ -174,14 +177,7 @@ export default function Campaigns() {
                     </td>
                     <td className={cell}>
                       {editing ? (
-                        <select aria-label="Destination" value={edit.dest} onChange={(e) => setEdit({ ...edit, dest: e.target.value })} className={INPUT}>
-                          <option value="">No destination</option>
-                          {dests.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.name}
-                            </option>
-                          ))}
-                        </select>
+                        <DestPicker dests={dests} value={edit.dest} email={user?.email ?? ""} onChange={(id) => setEdit({ ...edit, dest: id })} onCreated={setDests} />
                       ) : c.destination ? (
                         <span className="inline-flex flex-wrap items-center gap-1.5">
                           <Pill tone="t">{c.destination}</Pill>

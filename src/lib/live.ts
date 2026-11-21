@@ -455,3 +455,10 @@ export async function seatsFor(destinationId: string): Promise<{ departures: num
   const rows = (data ?? []) as { departure_date: string; seats_available: number | null }[];
   return { departures: rows.length, seats: rows.reduce((n, r) => n + (r.seats_available ?? 0), 0), unknown: rows.filter((r) => r.seats_available == null).length, next: rows[0]?.departure_date ?? null };
 }
+
+/** Tag a TravelCRM package to a destination. Its name becomes a word on that destination, so later departures match. */
+export async function tagPackage(packageName: string, destinationId: string) {
+  if (!supabase) return "Supabase is not connected in this build.";
+  const { error } = await supabase.rpc("tag_package", { p_package: packageName, p_destination: destinationId });
+  return error?.message ?? null;
+}

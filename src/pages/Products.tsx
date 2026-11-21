@@ -1,7 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { B, Card, PageHead, Pill, Stat, Mini } from "../components/ui";
-import { type Departure, type Destination, count, fetchDepartures, fetchDestinations, when } from "../lib/live";
+import { B, Btn, Card, PageHead, Pill, Stat, Mini } from "../components/ui";
+import { DestPicker } from "../components/DestPicker";
+import { useAuth } from "../lib/auth";
+import { useStore } from "../lib/store";
+import { type Departure, type Destination, count, fetchDepartures, fetchDestinations, tagPackage, when } from "../lib/live";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 const day = (iso: string | null, year = true) =>
@@ -19,6 +22,29 @@ export default function Products() {
   const [country, setCountry] = useState("");
   const [past, setPast] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const { user } = useAuth();
+  const { act } = useStore();
+  const [tag, setTag] = useState<{ key: string; dest: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    fetchDepartures().then((r) => {
+      setDeps(r.departures);
+      setPax(r.pax);
+      setLoading(false);
+    });
+  async function saveTagFor(g: Group) {
+    const dest = dests.find((d) => d.id === tag?.dest);
+    if (!dest) return;
+    setBusy(true);
+    let err: string | null = null;
+    for (const p of g.packages) err = (await tagPackage(p, dest.id)) ?? err;
+    setBusy(false);
+    act(`Set ${g.packages.length === 1 ? g.packages[0] : `${g.packages.length} packages of ${g.name}`} to ${dest.name}${err ? " (failed)" : ""}`, "Products", err ?? `Saved. ${g.name} now counts under ${dest.name}, and so will its later departures.`);
+    if (!err) {
+      setTag(null);
+      await load();
+    }
+  }
   useEffect(() => {
     void fetchDepartures().then((r) => {
       setDeps(r.departures);
@@ -43,7 +69,7 @@ export default function Products() {
     return Array.from(map.values())
       .filter((g) => !country || g.country === country)
       .map((g) => ({ ...g, list: g.list.sort((a, b) => (a.departure_date ?? "").localeCompare(b.departure_date ?? "")) }))
-      .sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name));
+      .sort((a, b) => Number(a.matched) - Number(b.matched) || a.country.localeCompare(b.country) || a.name.localeCompare(b.name));
   }, [deps, dests, country, past, today]);
 
   const all = groups.flatMap((g) => g.list);
@@ -107,6 +133,11 @@ export default function Products() {
                             <Pill tone="a">No destination</Pill>
                           </span>
                         )}
+                        <div className="mt-1.5 sm:hidden">
+                          <Btn small kind={g.matched ? "s" : "p"} onClick={() => setTag(tag?.key === g.key ? null : { key: g.key, dest: g.matched ? g.key : "" })}>
+                            {g.matched ? "Change destination" : "Set destination"}
+                          </Btn>
+                        </div>
                         <Mini>
                           {dated.length ? `${day(dated[0].departure_date)} to ${day(dated[dated.length - 1].departure_date)}` : "No dates"} · {count(g.list.length)} dates · {count(seats)} seats left
                           {taken ? ` · ${count(taken)} deposit pax` : ""}
@@ -120,12 +151,36 @@ export default function Products() {
                         {low > 0 && <span className="ml-2 text-[12px] font-semibold text-[#8A5300]">{low} nearly full</span>}
                       </td>
                       <td className={`${td} text-right`}>{taken ? count(taken) : ""}</td>
-                      <td className={td}>
+                      <td className={`${td} whitespace-nowrap`}>
+                        <Btn small kind={g.matched ? "s" : "p"} className="mr-1.5" onClick={() => setTag(tag?.key === g.key ? null : { key: g.key, dest: g.matched ? g.key : "" })}>
+                          {g.matched ? "Change" : "Set destination"}
+                        </Btn>
                         <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [g.key]: !isOpen }))} className="min-h-[44px] whitespace-nowrap rounded-lg border border-[#9AA39E] bg-white px-3 text-[13px] font-semibold">
                           {isOpen ? "Hide dates" : "Show dates"}
                         </button>
                       </td>
                     </tr>
+                    {tag?.key === g.key && (
+                      <tr>
+                        <td colSpan={7} className="border-b border-line bg-[#F1F8F5] px-3 py-3">
+                          <div className="sticky left-3 flex flex-col gap-2" style={{ width: "min(420px, calc(100vw - 64px))" }}>
+                            <div className="text-sm">
+                              <B>Where does this product belong?</B> Choose the country, then the region. A region that is not on the list can be added here.
+                            </div>
+                            <div className="text-[13px] text-muted">{g.packages.join(" · ")}</div>
+                            <DestPicker dests={dests} value={tag.dest} email={user?.email ?? ""} onChange={(id) => setTag({ key: g.key, dest: id })} onCreated={setDests} />
+                            <div className="flex gap-2">
+                              <Btn small disabled={busy || !tag.dest} onClick={() => void saveTagFor(g)}>
+                                {busy ? "Saving…" : "Save"}
+                              </Btn>
+                              <Btn small kind="s" disabled={busy} onClick={() => setTag(null)}>
+                                Cancel
+                              </Btn>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     {isOpen && (
                       <tr>
                         <td colSpan={7} className="border-b border-line bg-ground px-3 py-3">
