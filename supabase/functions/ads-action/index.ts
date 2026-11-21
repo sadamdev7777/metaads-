@@ -1,5 +1,5 @@
-// Adam, the Ads Manager. Carries out ONE approved proposal in Meta: pause an ad, ad set or campaign, or
-// change a daily budget. Only a signed-in person can call it, one proposal at a time. Nothing here runs
+// Adam, the Ads Manager. Makes ONE change in Meta at a time, only when a signed-in person asks: an approved
+// proposal, or a direct pause, turn-on or daily budget change from the campaign page. Nothing here runs
 // on a schedule. Every change is recorded with the state before and after, and a pause can be undone.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -73,6 +73,55 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, state: now });
     } catch (e) {
       return json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  /* ---------- A direct change from the campaign page ---------- */
+  if (body.action === "direct") {
+    const level = String(body.level ?? "");
+    const kind = String(body.kind ?? "");
+    if (!TABLE[level] || !["pause", "activate", "budget"].includes(kind)) return json({ ok: false, error: "Unknown change." }, 400);
+    const { data: ent } = await admin.from(TABLE[level].table).select("*").eq("id", String(body.id ?? "")).maybeSingle();
+    const metaId = ent ? String(ent[TABLE[level].meta] ?? "") : "";
+    if (!ent || !metaId) return json({ ok: false, error: "That item was not found. Sync with Meta and try again." });
+    const { data: rules } = await admin.from("rules").select("max_budget_increase_pct, max_actions_per_day").limit(1).maybeSingle();
+    const maxPerDay = Number(rules?.max_actions_per_day ?? 20);
+    const maxRaisePct = Number(rules?.max_budget_increase_pct ?? 30);
+    const { count: recent } = await admin.from("ads_actions").select("id", { count: "exact", head: true }).eq("ok", true).gte("created_at", new Date(Date.now() - 24 * 3600000).toISOString());
+    if ((recent ?? 0) >= maxPerDay) return json({ ok: false, error: `The limit of ${maxPerDay} changes in 24 hours has been reached. Change it in Settings, Rules.` });
+    const what = level.replace("_", " ");
+    let before: Awaited<ReturnType<typeof read>> | null = null;
+    try {
+      before = await read(metaId);
+      let fields: Record<string, string>;
+      let summary: string;
+      if (kind === "pause") {
+        fields = { status: "PAUSED" };
+        summary = `Paused ${what} “${before.name}” in Meta`;
+      } else if (kind === "activate") {
+        fields = { status: "ACTIVE" };
+        summary = `Turned on ${what} “${before.name}” in Meta`;
+      } else {
+        if (level === "ad") return json({ ok: false, error: "An ad has no budget of its own. Change the budget on its ad set or campaign." });
+        if (before.daily_budget == null) return json({ ok: false, error: `This ${what} has no daily budget of its own. The budget is set on the ${level === "ad_set" ? "campaign" : "ad sets"}.` });
+        const next = Math.round(Number(body.new_daily_budget) * 100) / 100;
+        if (!Number.isFinite(next) || next < 5) return json({ ok: false, error: "Enter the new daily budget in RM (at least RM5)." });
+        const limit = before.daily_budget * (1 + maxRaisePct / 100);
+        if (next > limit + 0.001) return json({ ok: false, error: `That is more than ${maxRaisePct}% above the current RM${before.daily_budget}. The most allowed in one step is RM${Math.floor(limit)}.` });
+        fields = { daily_budget: String(Math.round(next * 100)) };
+        summary = `Changed the daily budget of ${what} “${before.name}” from RM${before.daily_budget} to RM${next} in Meta`;
+      }
+      await write(metaId, fields);
+      const after = await read(metaId);
+      await admin.from("ads_actions").insert({ kind, level, entity_id: ent.id, meta_id: metaId, entity_name: before.name ?? String(ent.name ?? ""), before, after, ok: true, by_email: email });
+      await mirror(level, String(ent.id), after);
+      await admin.from("activity_log").insert({ user_id: who.user.id, user_email: email, action: summary, area: "Approvals" });
+      const held = kind === "activate" && after.effective_status !== "ACTIVE" ? ` It is on, but not delivering yet (${String(after.effective_status ?? "").toLowerCase().replace(/_/g, " ")}): check that its campaign and ad set are on.` : "";
+      return json({ ok: true, note: `${summary}.${held}`, before, after });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      await admin.from("ads_actions").insert({ kind, level, entity_id: ent.id, meta_id: metaId, entity_name: before?.name ?? String(ent.name ?? ""), before: before ?? {}, after: {}, ok: false, error: message, by_email: email });
+      return json({ ok: false, error: message });
     }
   }
 

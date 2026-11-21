@@ -1,0 +1,2 @@
+-- media.meta_image_hash / meta_video_id, campaign_manage(campaign, from, to) and History names for "activate"
+-- and "create". Applied on 2026-11-21 as "manage_campaign" (full definitions there).

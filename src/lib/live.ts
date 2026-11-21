@@ -386,3 +386,42 @@ export async function runAgent(fn: "budget-planner" | "creative-analyst"): Promi
   if (error || !data?.ok) return { ok: false, error: (data?.error as string) || error?.message || "Something went wrong." };
   return data;
 }
+
+/* ---------- Managing one campaign from the system ---------- */
+export type ManagedCampaign = {
+  campaign: { id: string; name: string; delivery_status: string | null; daily_budget: number | null; destination_id: string | null; destination: string | null; country: string | null; run_by: string | null } | null;
+  ad_sets: AdSetRow[];
+};
+export async function fetchManaged(campaignId: string, p: Period): Promise<ManagedCampaign> {
+  if (!supabase) return { campaign: null, ad_sets: [] };
+  const { data } = await supabase.rpc("campaign_manage", { p_campaign: campaignId, p_from: p.from, p_to: p.to });
+  return (data ?? { campaign: null, ad_sets: [] }) as ManagedCampaign;
+}
+export type AdTemplate = { ok: boolean; error?: string; pending?: boolean; note?: string; template_ad_id?: string; template_ad?: string; kind?: string; message?: string; title?: string; link?: string; cta?: string };
+/** Ask Meta what a new ad would copy (action "template"), or create the ad, paused (action "create"). */
+export async function adCreate(body: Record<string, unknown>): Promise<AdTemplate> {
+  if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
+  const { data, error } = await supabase.functions.invoke("ad-create", { body });
+  if (error && !data) return { ok: false, error: error.message };
+  return (data ?? { ok: false, error: "No answer." }) as AdTemplate;
+}
+/** The brief behind one of Anis's proposals: campaign, hook and the full ad text from her review. */
+export async function fetchBrief(proposalId: string): Promise<{ target: string; hook: string; text: string; concept: string } | null> {
+  if (!supabase) return null;
+  const { data: p } = await supabase.from("proposals").select("target, reason, how, expected, report_id").eq("id", proposalId).maybeSingle();
+  if (!p) return null;
+  const hook = (String(p.reason ?? "").match(/"(.+)"\s*$/)?.[1] ?? "").trim();
+  let text = String(p.expected ?? "").replace(/^Ad text:\s*/, "");
+  if (p.report_id) {
+    const { data: r } = await supabase.from("ai_reports").select("findings").eq("id", p.report_id).maybeSingle();
+    const hit = ((r?.findings ?? []) as { title?: string; detail?: string }[]).find((f) => hook && String(f.title ?? "").includes(hook.slice(0, 60)));
+    const full = String(hit?.detail ?? "").match(/Ad text:\s*([\s\S]*?)\n\nWhy:/)?.[1];
+    if (full) text = full.trim();
+  }
+  return { target: String(p.target ?? ""), hook, text, concept: String(p.how ?? "") };
+}
+export async function findCampaignId(name: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.from("campaigns").select("id").eq("name", name).eq("is_sample", false).limit(2);
+  return data?.length === 1 ? String(data[0].id) : null;
+}

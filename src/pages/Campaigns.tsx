@@ -87,7 +87,7 @@ export default function Campaigns() {
     <>
       <PageHead
         title="Campaigns"
-        sub={`Step 3. Live from Meta Ads. Last sync ${when(last)}. Nothing changes in Meta without an approval.`}
+        sub={`Step 3. Live from Meta Ads. Last sync ${when(last)}. Open a campaign to pause, turn on, change a budget or add an ad.`}
         right={
           <div className="flex items-center gap-2">
             <Btn kind="s" disabled={busy} onClick={() => void sync()}>
@@ -166,7 +166,7 @@ export default function Campaigns() {
                 return (
                   <tr key={c.id}>
                     <td className={cell}>
-                      <B>{c.name}</B>
+                      <Link to={`/campaigns/${c.id}`} className="font-bold">{c.name}</Link>
                       <Mini>
                         {c.spend ? rm(c.spend) : "No spend"}
                         {c.leads ? ` · ${count(c.leads)} leads · ${cpl(c.spend, c.leads)} each` : c.spend ? " · no leads" : ""}

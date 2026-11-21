@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Avatar, B, Btn, Card, PageHead, Pill, T } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { type AdsAction, type Proposal, adam, confTone, decideProposal, fetchAdsActions, fetchProposals, proposalKind, when, agentOf } from "../lib/live";
+import { type AdsAction, type Proposal, adam, confTone, decideProposal, fetchAdsActions, fetchProposals, proposalKind, when, agentOf, findCampaignId } from "../lib/live";
 import { useStore } from "../lib/store";
 
 const INPUT = "min-h-[44px] w-[140px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -10,6 +11,12 @@ type Confirm = { id: string; budget: string; hint?: string };
 export default function Approvals() {
   const { user } = useAuth();
   const { act } = useStore();
+  const navigate = useNavigate();
+  async function makeAd(p: Proposal) {
+    const id = await findCampaignId(String(p.target ?? "").split(">")[0].trim());
+    if (!id) return act(`Could not find the campaign for ${p.target}`, "Approvals", "The campaign named in this brief was not found. Open it from Campaigns and add the ad there.");
+    navigate(`/campaigns/${id}?brief=${p.id}`);
+  }
   const [list, setList] = useState<Proposal[]>([]);
   const [actions, setActions] = useState<AdsAction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,17 +154,23 @@ export default function Approvals() {
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <Btn className="flex-1" disabled={busy} onClick={() => (kind === "manual" ? void record(p, "approved") : setConfirm({ id: p.id, budget: "" }))}>
-                    {kind === "manual" ? "Approve" : "Approve…"}
-                  </Btn>
+                <div className="flex flex-wrap gap-2">
+                  {p.agent === "creative" ? (
+                    <Btn className="flex-1" disabled={busy} onClick={() => void makeAd(p)}>
+                      Create this ad…
+                    </Btn>
+                  ) : (
+                    <Btn className="flex-1" disabled={busy} onClick={() => (kind === "manual" ? void record(p, "approved") : setConfirm({ id: p.id, budget: "" }))}>
+                      {kind === "manual" ? "Approve" : "Approve…"}
+                    </Btn>
+                  )}
                   <Btn className="flex-1" kind="s" disabled={busy} onClick={() => void record(p, "rejected")}>
                     Reject
                   </Btn>
                 </div>
               )}
               <div className="text-xs text-muted">
-                {kind === "manual" ? "Record only: make this change yourself in Ads Manager." : "Adam can make this change in Meta after you confirm."}
+                {p.agent === "creative" ? "Opens the campaign with Anis's text filled in. You choose the video or picture; the ad is created paused." : kind === "manual" ? "Record only: make this change yourself in Ads Manager." : "Adam can make this change in Meta after you confirm."}
               </div>
             </Card>
           );

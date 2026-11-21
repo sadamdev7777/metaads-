@@ -9,6 +9,7 @@ import Products from "./pages/Products";
 import MediaPage from "./pages/Media";
 import Campaigns from "./pages/Campaigns";
 import CampaignNew from "./pages/CampaignNew";
+import CampaignManage from "./pages/CampaignManage";
 import Analysis from "./pages/Analysis";
 import AIOffice from "./pages/AIOffice";
 import History from "./pages/History";
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/media" element={<MediaPage />} />
           <Route path="/campaigns" element={<Campaigns />} />
           <Route path="/campaigns/new" element={<CampaignNew />} />
+          <Route path="/campaigns/:id" element={<CampaignManage />} />
           <Route path="/analysis" element={<Analysis />} />
           <Route path="/ai-office" element={<AIOffice />} />
           <Route path="/history" element={<History />} />
