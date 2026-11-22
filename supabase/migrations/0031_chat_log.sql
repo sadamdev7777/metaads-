@@ -1,0 +1,1 @@
+-- Applied through the Supabase connector: table chat_log, a record of what staff asked in the chat and what was answered.

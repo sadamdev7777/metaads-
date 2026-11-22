@@ -1,3 +1,4 @@
+import ChatBubble from "./ChatBubble";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -125,6 +126,7 @@ export default function Layout() {
         <Outlet />
       </main>
 
+      <ChatBubble />
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 flex justify-center px-4">
         {toast && <div className="max-w-xl rounded-lg bg-ink px-4 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>}
       </div>
