@@ -195,7 +195,7 @@ export default function CampaignBuild() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {run.campaign_id && (
-                  <Link to={`/campaigns/${run.campaign_id}`} className="flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
+                  <Link to={`/campaigns/${run.campaign_id}`} className="flex min-h-[36px] sm:min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
                     Open the campaign
                   </Link>
                 )}

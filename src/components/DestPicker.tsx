@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Btn } from "./ui";
 import { COUNTRIES, type Destination, fetchDestinations, saveDestination } from "../lib/live";
 
-const INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 const NEW = "__new";
 /** "China - Yunnan" shows as "Yunnan" under China; a destination named like its country is the whole country. */
 const regionOf = (d: Destination) => (d.name.toLowerCase() === d.country.toLowerCase() ? "Whole country" : d.name.replace(new RegExp(`^${d.country.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[-–:]\\s*`, "i"), ""));

@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { type Pick, builder } from "../../lib/build";
 
-export const INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+export const INPUT = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 export const money = (v: string) => v.replace(/[^0-9.]/g, "");
 
 /** One numbered step of the form. Closed, it shows a one-line summary of what was chosen. */
@@ -44,7 +44,7 @@ export function Seg<T extends string>({ label, value, options, onChange }: { lab
     <div className="flex min-w-0 flex-col gap-1.5">
       <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
         {options.map((o) => (
-          <button key={o.v} type="button" role="radio" aria-checked={o.v === value} onClick={() => onChange(o.v)} className={`min-h-[44px] rounded-lg border px-3 text-sm ${o.v === value ? "border-brand bg-[#E6F1EE] font-bold text-ink" : "border-[#9AA39E] bg-white font-semibold text-ink"}`}>
+          <button key={o.v} type="button" role="radio" aria-checked={o.v === value} onClick={() => onChange(o.v)} className={`min-h-[36px] sm:min-h-[44px] rounded-lg border px-2.5 text-[13px] sm:px-3 sm:text-sm ${o.v === value ? "border-brand bg-[#E6F1EE] font-bold text-ink" : "border-[#9AA39E] bg-white font-semibold text-ink"}`}>
             {o.t}
           </button>
         ))}
@@ -61,7 +61,7 @@ export function Ticks({ label, options, value, onChange }: { label: string; opti
       {options.map((o) => {
         const on = value.includes(o.v);
         return (
-          <button key={o.v} type="button" aria-pressed={on} onClick={() => onChange(on ? value.filter((x) => x !== o.v) : [...value, o.v])} className={`min-h-[40px] rounded-full border px-3 text-[13px] ${on ? "border-brand bg-[#E6F1EE] font-bold" : "border-line bg-white"}`}>
+          <button key={o.v} type="button" aria-pressed={on} onClick={() => onChange(on ? value.filter((x) => x !== o.v) : [...value, o.v])} className={`min-h-[32px] rounded-full border px-2.5 text-[13px] sm:min-h-[40px] sm:px-3 ${on ? "border-brand bg-[#E6F1EE] font-bold" : "border-line bg-white"}`}>
             {on ? "✓ " : ""}
             {o.t}
           </button>
@@ -117,7 +117,7 @@ export function Finder({ id, type, placeholder, onPick, skip = [] }: { id: strin
         <ul className="m-0 flex max-h-[240px] list-none flex-col divide-y divide-line overflow-y-auto rounded-lg border border-line p-0">
           {shown.map((r) => (
             <li key={`${r.kind ?? ""}${r.id}`}>
-              <button type="button" onClick={() => { onPick(r); setQ(""); setResults([]); }} className="flex min-h-[44px] w-full flex-col justify-center border-0 bg-white px-3 py-1.5 text-left">
+              <button type="button" onClick={() => { onPick(r); setQ(""); setResults([]); }} className="flex min-h-[36px] sm:min-h-[44px] w-full flex-col justify-center border-0 bg-white px-3 py-1.5 text-left">
                 <span className="text-sm font-semibold text-ink">{r.name}</span>
                 {r.note && <span className="text-xs text-muted">{r.note}</span>}
               </button>

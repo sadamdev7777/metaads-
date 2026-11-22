@@ -40,7 +40,7 @@ export default function Layout() {
           to={n.to}
           onClick={() => setOpen(false)}
           className={({ isActive }) =>
-            `flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm no-underline ${
+            `flex min-h-[36px] sm:min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm no-underline ${
               isActive ? "bg-brand font-bold text-white" : "font-medium text-ink hover:bg-[#ECEFEC]"
             }`
           }
@@ -85,7 +85,7 @@ export default function Layout() {
           aria-expanded={open}
           aria-controls="mobile-menu"
           onClick={() => setOpen((o) => !o)}
-          className="min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-sm font-semibold"
+          className="min-h-[36px] sm:min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-sm font-semibold"
         >
           {open ? "Close menu" : "Menu"}
         </button>
@@ -93,7 +93,7 @@ export default function Layout() {
       {open && (
         <div id="mobile-menu" className="border-b border-line bg-white p-3 md:hidden">
           {links}
-          <button type="button" onClick={() => void signOut()} className="mt-2 min-h-[44px] px-3 text-sm font-semibold text-brand">
+          <button type="button" onClick={() => void signOut()} className="mt-2 min-h-[36px] sm:min-h-[44px] px-3 text-sm font-semibold text-brand">
             Sign out
           </button>
         </div>
@@ -110,7 +110,7 @@ export default function Layout() {
         <div className="mt-auto px-3 text-xs text-muted">
           <div className="break-all font-semibold text-ink">{user?.name}</div>
           <div className="break-all">{user?.email}</div>
-          <button type="button" onClick={() => void signOut()} className="mt-1 min-h-[44px] text-[13px] font-semibold text-brand">
+          <button type="button" onClick={() => void signOut()} className="mt-1 min-h-[36px] sm:min-h-[44px] text-[13px] font-semibold text-brand">
             Sign out
           </button>
         </div>

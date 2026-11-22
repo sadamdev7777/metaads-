@@ -4,7 +4,7 @@ import { useAuth } from "../lib/auth";
 import { type Proposal, REJECT_REASONS, adam, agentOf, decideProposal, proposalKind, rejectProposal } from "../lib/live";
 import { useStore } from "../lib/store";
 
-const INPUT = "min-h-[44px] w-full max-w-[220px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] w-full max-w-[220px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 
 /**
  * Approve or reject one proposal, wherever it is shown. A pause or a budget change is made in Meta by Adam

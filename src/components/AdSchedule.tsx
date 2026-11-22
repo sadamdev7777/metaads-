@@ -307,7 +307,7 @@ export default function AdSchedule() {
                 <div className="flex max-h-[280px] flex-col overflow-y-auto rounded-lg border border-line">
                   {running.length === 0 && <div className="px-3 py-3 text-sm text-muted">No campaign is running right now. Only running campaigns can be chosen.</div>}
                   {running.map((c) => (
-                    <label key={c.id} className="flex min-h-[44px] items-center gap-2.5 border-b border-line px-3 text-sm last:border-b-0">
+                    <label key={c.id} className="flex min-h-[36px] sm:min-h-[44px] items-center gap-2.5 border-b border-line px-3 text-sm last:border-b-0">
                       <input type="checkbox" checked={draft.scope_values.includes(c.id)} onChange={(e) => setDraft({ ...draft, scope_values: e.target.checked ? [...draft.scope_values, c.id] : draft.scope_values.filter((x) => x !== c.id) })} className="h-5 w-5 flex-none" />
                       <span className="min-w-0 break-words">{c.name}</span>
                     </label>

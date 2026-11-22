@@ -33,7 +33,7 @@ export default function Settings() {
             key={t.key}
             to={`/settings/${t.key}`}
             className={({ isActive }) =>
-              `flex min-h-[44px] items-center border-b-[3px] px-4 text-sm no-underline ${isActive ? "border-brand font-bold text-brand" : "border-transparent font-medium text-muted"}`
+              `flex min-h-[36px] sm:min-h-[44px] items-center border-b-[3px] px-4 text-sm no-underline ${isActive ? "border-brand font-bold text-brand" : "border-transparent font-medium text-muted"}`
             }
           >
             {t.label}
@@ -171,7 +171,7 @@ function Rules() {
                     type="button"
                     aria-pressed={modes[k] === v}
                     onClick={() => setModes((x) => ({ ...x, [k]: v }))}
-                    className={`min-h-[44px] px-3.5 text-[13px] font-semibold ${modes[k] === v ? "bg-brand text-white" : "bg-white text-ink"}`}
+                    className={`min-h-[36px] sm:min-h-[44px] px-3.5 text-[13px] font-semibold ${modes[k] === v ? "bg-brand text-white" : "bg-white text-ink"}`}
                   >
                     {v === "approval" ? "Approval" : "Auto"}
                   </button>
@@ -202,7 +202,7 @@ function Rules() {
 
 /* ---------------- Destinations ---------------- */
 
-const DEST_INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const DEST_INPUT = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 type DestDraft = { id?: string; name: string; country: string; keywords: string };
 
 function Destinations() {
@@ -603,7 +603,7 @@ function MetaAdsCard({ row, reload }: { row: Integ; reload: () => Promise<void> 
   }
 
   const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "never");
-  const input = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+  const input = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 
   return (
     <Card title="Meta Ads" right={statusPill(row.status)} className="md:col-span-2">
@@ -664,7 +664,7 @@ function MetaAdsCard({ row, reload }: { row: Integ; reload: () => Promise<void> 
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
           <legend className="mb-1 text-[13px] font-semibold">Ad accounts to load into the system</legend>
           {accounts.map((a) => (
-            <label key={a.id} className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-line px-3">
+            <label key={a.id} className="flex min-h-[36px] sm:min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-line px-3">
               <input
                 type="checkbox"
                 className="h-[18px] w-[18px]"
@@ -741,7 +741,7 @@ const CONNECT: Record<string, { steps: string[]; fields: FieldDef[]; summary: (c
 };
 
 const whenText = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "never");
-const INPUT_CLS = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT_CLS = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 
 function useConnect(key: string, reload: () => Promise<void>) {
   const { act } = useStore();

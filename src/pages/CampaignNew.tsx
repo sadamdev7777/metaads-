@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 import { type Destination, type Draft, type MediaItem, cpl, fetchDestinations, fetchDrafts, fetchMedia, mira, rm, saveDraft, useCampaigns, when } from "../lib/live";
 import { useStore } from "../lib/store";
 
-const INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 const today = () => {
   const d = new Date();
   return `${d.getDate()}/${d.getMonth() + 1}`;
@@ -80,7 +80,7 @@ export default function CampaignNew() {
 
   return (
     <>
-      <PageHead title="Duplicate a campaign" sub="Copies a whole campaign as it is, with every ad set and ad, under a new name. It is created paused. To choose the settings and ads yourself, use Run campaign." right={<Link to="/campaigns/new" className="flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] bg-white px-4 text-sm font-semibold text-ink no-underline">Run campaign</Link>} />
+      <PageHead title="Duplicate a campaign" sub="Copies a whole campaign as it is, with every ad set and ad, under a new name. It is created paused. To choose the settings and ads yourself, use Run campaign." right={<Link to="/campaigns/new" className="flex min-h-[36px] sm:min-h-[44px] items-center rounded-lg border border-[#9AA39E] bg-white px-4 text-sm font-semibold text-ink no-underline">Run campaign</Link>} />
 
       {busy && <div role="status" className="rounded-xl bg-[#FBEFD5] px-5 py-3 text-sm font-semibold">{busy}</div>}
 

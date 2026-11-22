@@ -5,7 +5,7 @@ import { STAFF } from "../lib/data";
 import { type DashPeriod, type Report, count, cpl, delivery, fetchLatestReport, paxLabel, paxTone, pendingCount, perPax, rm, rm2, spanText, useCampaigns, useCountryCost, useDashTotals, useMonthTotals, when } from "../lib/live";
 import { supabase } from "../lib/supabase";
 
-const linkBtn = "flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-3.5 text-sm font-semibold text-ink no-underline";
+const linkBtn = "flex min-h-[36px] sm:min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-3.5 text-sm font-semibold text-ink no-underline";
 const cardLink = "text-[13px] font-semibold";
 
 type Key = "today" | "yesterday" | "week" | "month";
@@ -115,7 +115,7 @@ export default function Dashboard() {
             </div>
             <div className="text-sm text-[#D6EBE4]">Tag the destination and who ran it, so spend is counted in the right place.</div>
           </div>
-          <Link to="/campaigns" className="flex min-h-[44px] items-center justify-center rounded-lg bg-white px-5 text-sm font-bold text-brand no-underline">
+          <Link to="/campaigns" className="flex min-h-[36px] sm:min-h-[44px] items-center justify-center rounded-lg bg-white px-5 text-sm font-bold text-brand no-underline">
             Tag now
           </Link>
         </div>

@@ -16,7 +16,7 @@ export default function Login() {
     setBusy(false);
   }
 
-  const input = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+  const input = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 
   return (
     <div className="flex min-h-screen flex-col bg-ground text-ink md:flex-row">

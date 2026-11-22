@@ -6,7 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useStore } from "../lib/store";
 import { type Departure, type Destination, count, fetchDepartures, fetchDestinations, tagPackage, when } from "../lib/live";
 
-const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 const day = (iso: string | null, year = true) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-MY", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}) }) : "No date";
 /** "01. SABAH - KK KUNDASANG 2026" and "01. DOMESTIK - KK & KUNDASANG 2027" are the same product in different years. */
@@ -96,7 +96,7 @@ export default function Products() {
             <option key={c}>{c}</option>
           ))}
         </select>
-        <label className="flex min-h-[44px] items-center gap-2 text-sm">
+        <label className="flex min-h-[36px] sm:min-h-[44px] items-center gap-2 text-sm">
           <input type="checkbox" checked={past} onChange={(e) => setPast(e.target.checked)} className="h-5 w-5" />
           Show past departures
         </label>
@@ -155,7 +155,7 @@ export default function Products() {
                         <Btn small kind={g.matched ? "s" : "p"} className="mr-1.5" onClick={() => setTag(tag?.key === g.key ? null : { key: g.key, dest: g.matched ? g.key : "" })}>
                           {g.matched ? "Change" : "Set destination"}
                         </Btn>
-                        <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [g.key]: !isOpen }))} className="min-h-[44px] whitespace-nowrap rounded-lg border border-[#9AA39E] bg-white px-3 text-[13px] font-semibold">
+                        <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [g.key]: !isOpen }))} className="min-h-[36px] sm:min-h-[44px] whitespace-nowrap rounded-lg border border-[#9AA39E] bg-white px-3 text-[13px] font-semibold">
                           {isOpen ? "Hide dates" : "Show dates"}
                         </button>
                       </td>

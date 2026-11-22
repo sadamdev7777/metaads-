@@ -8,7 +8,7 @@ import { useStore } from "../lib/store";
 import { ScheduleStrip } from "../components/AdSchedule";
 import { DestPicker } from "../components/DestPicker";
 
-const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 const PAGE = 50;
 
 function Pick({ id, label, value, onChange, options }: { id: string; label: string; value: string; onChange: (v: string) => void; options: string[] }) {
@@ -127,7 +127,7 @@ export default function Campaigns() {
             <Btn kind="s" disabled={busy} onClick={() => void sync()}>
               {busy ? "Working…" : "Sync now"}
             </Btn>
-            <Link to="/campaigns/new" className="flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
+            <Link to="/campaigns/new" className="flex min-h-[36px] sm:min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
               Run campaign
             </Link>
           </div>
@@ -149,7 +149,7 @@ export default function Campaigns() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to="/settings/destinations" className="flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
+            <Link to="/settings/destinations" className="flex min-h-[36px] sm:min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-bold text-white no-underline">
               Open Destinations
             </Link>
             <Btn

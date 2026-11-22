@@ -95,9 +95,9 @@ export default function ChatBubble() {
             </div>
             <div className="flex flex-none gap-1.5">
               {msgs.length > 0 && (
-                <button type="button" onClick={() => setMsgs([])} className="min-h-[44px] rounded-lg border border-line bg-white px-2.5 text-[13px] font-semibold text-ink">New chat</button>
+                <button type="button" onClick={() => setMsgs([])} className="min-h-[36px] sm:min-h-[44px] rounded-lg border border-line bg-white px-2.5 text-[13px] font-semibold text-ink">New chat</button>
               )}
-              <button type="button" aria-label="Close the chat" onClick={() => setOpen(false)} className="min-h-[44px] min-w-[44px] rounded-lg border border-line bg-white text-lg leading-none text-ink">×</button>
+              <button type="button" aria-label="Close the chat" onClick={() => setOpen(false)} className="min-h-[36px] sm:min-h-[44px] min-w-[44px] rounded-lg border border-line bg-white text-lg leading-none text-ink">×</button>
             </div>
           </div>
 

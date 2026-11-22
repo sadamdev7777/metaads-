@@ -4,7 +4,7 @@ import { useAuth } from "../lib/auth";
 import { type Destination, type MediaItem, fetchDestinations, fetchMedia, removeMedia, uploadMedia, when } from "../lib/live";
 import { useStore } from "../lib/store";
 
-const INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 const PLACEMENTS = ["Reels", "Feed", "Story"];
 const mb = (n: number | null) => (n ? `${(n / 1048576).toFixed(1)} MB` : "");
 
@@ -150,7 +150,7 @@ export default function MediaPage() {
             </div>
             <div className="mt-auto flex gap-2">
               {m.url && (
-                <a href={m.url} target="_blank" rel="noreferrer" className="flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-[#9AA39E] text-[13px] font-semibold text-ink no-underline">
+                <a href={m.url} target="_blank" rel="noreferrer" className="flex min-h-[36px] sm:min-h-[44px] flex-1 items-center justify-center rounded-lg border border-[#9AA39E] text-[13px] font-semibold text-ink no-underline">
                   Open
                 </a>
               )}

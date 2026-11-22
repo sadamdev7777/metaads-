@@ -4,7 +4,7 @@ import { B, Btn, Card, PageHead, Pill, RunBy } from "../components/ui";
 import { ProposalActions } from "../components/ProposalActions";
 import { PERIODS, type AdSetRow, type CampaignRow, type DestCost, type Proposal, type Report, confTone, count, cpl, delivery, fetchLatestReport, fetchPendingProposals, fetchTreeIn, paxLabel, paxTone, perPax, period, rm, rm2, spanText, useCampaignsIn, useDestinationCostIn, useMonthTotals, when } from "../lib/live";
 
-const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 const NONE = "Not tagged";
 type Group = { key: string; campaigns: number; spend: number; leads: number };
 
@@ -191,7 +191,7 @@ export default function Analysis() {
               </ul>
             )}
             <div className="flex flex-wrap items-center gap-3">
-              <Link to="/approvals" className="inline-flex min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-4 text-sm font-semibold text-ink no-underline">
+              <Link to="/approvals" className="inline-flex min-h-[36px] sm:min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-4 text-sm font-semibold text-ink no-underline">
                 All proposals in Approvals
               </Link>
               <Link to="/ai-office" className="text-sm font-semibold">Full report</Link>

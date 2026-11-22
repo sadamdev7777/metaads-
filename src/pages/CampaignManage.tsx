@@ -4,7 +4,7 @@ import { B, Btn, Card, PageHead, Pill } from "../components/ui";
 import { type AdRow, type AdSetRow, type ManagedCampaign, type MediaItem, PERIODS, PREVIEW_FORMATS, adCreate, adPreview, adam, count, cpl, delivery, fetchBrief, fetchManaged, fetchMedia, period, rm, seatsFor, spanText } from "../lib/live";
 import { useStore } from "../lib/store";
 
-const INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 type Level = "campaign" | "ad_set" | "ad";
 type Ask = { level: Level; id: string; name: string; kind: "pause" | "activate" | "budget"; current?: number | null };
 
@@ -98,7 +98,7 @@ export default function CampaignManage() {
         right={
           <label className="flex flex-col gap-1 text-[13px] font-semibold" htmlFor="mp">
             Period
-            <select id="mp" value={label} onChange={(e) => setLabel(e.target.value)} className="min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] font-normal">
+            <select id="mp" value={label} onChange={(e) => setLabel(e.target.value)} className="min-h-[40px] sm:min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] font-normal">
               {PERIODS.map((p) => (
                 <option key={p}>{p}</option>
               ))}

@@ -87,7 +87,7 @@ export function Btn({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-[44px] whitespace-nowrap rounded-lg ${small ? "px-2.5 text-[13px]" : "px-4 text-sm"} ${BTN[kind]} disabled:opacity-50 ${className}`}
+      className={`min-h-[36px] sm:min-h-[44px] whitespace-nowrap rounded-lg ${small ? "px-2.5 text-[13px]" : "px-3 text-[13px] sm:px-4 sm:text-sm"} ${BTN[kind]} disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
@@ -167,7 +167,7 @@ export function Stat({ label, value, sub, extra }: { label: string; value: React
   );
 }
 
-const INPUT = "min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
+const INPUT = "min-h-[40px] sm:min-h-[44px] w-full rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
 
 export function Sel({ id, label, options }: { id: string; label: string; options: string[] }) {
   return (

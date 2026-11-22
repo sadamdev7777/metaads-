@@ -18,7 +18,7 @@ export function AudienceForm({ a, set, saved, extras }: { a: Audience; set: (a: 
   return (
     <>
       <Part>Audience</Part>
-      <label className="flex min-h-[44px] items-start gap-3 rounded-lg bg-ground px-3 py-2.5 text-sm">
+      <label className="flex min-h-[36px] sm:min-h-[44px] items-start gap-3 rounded-lg bg-ground px-3 py-2.5 text-sm">
         <input type="checkbox" checked={a.advantage} onChange={(e) => up({ advantage: e.target.checked })} className="mt-0.5 h-5 w-5 flex-none" />
         <span>
           <span className="font-bold">Advantage+ audience</span> (what MTB uses). Meta finds buyers by itself and treats the age, interests and saved audiences below as a starting
