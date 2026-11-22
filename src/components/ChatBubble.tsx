@@ -49,8 +49,12 @@ export default function ChatBubble() {
     end.current?.scrollIntoView({ block: "end" });
   }, [msgs, busy, open]);
   useEffect(() => {
+    document.body.classList.toggle("chat-open", open && window.innerWidth < 640);
+    return () => document.body.classList.remove("chat-open");
+  }, [open]);
+  useEffect(() => {
     if (!open) return;
-    input.current?.focus();
+    if (window.innerWidth >= 640) input.current?.focus(); // on a phone the keyboard would cover the chat before anything is read
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -75,7 +79,7 @@ export default function ChatBubble() {
   return (
     <>
       {!open && (
-        <button type="button" aria-label="Ask the AI staff" onClick={() => setOpen(true)} className="fixed bottom-5 right-4 z-40 flex h-14 items-center gap-2 rounded-full border-0 bg-brand pl-4 pr-5 text-sm font-bold text-white shadow-lg md:right-6">
+        <button type="button" aria-label="Ask the AI staff" onClick={() => setOpen(true)} className="fixed bottom-4 right-3 z-40 flex h-12 items-center gap-1.5 rounded-full border-0 bg-brand pl-3.5 pr-4 text-sm font-bold text-white shadow-lg sm:bottom-5 sm:h-14 sm:pl-4 sm:pr-5 md:right-6">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-4.4 3.7a.6.6 0 0 1-1-.46V16A2.5 2.5 0 0 1 4 13.5v-8Z" fill="#fff" />
           </svg>
@@ -83,7 +87,7 @@ export default function ChatBubble() {
         </button>
       )}
       {open && (
-        <div role="dialog" aria-label="Ask the AI staff" className="fixed inset-0 z-50 flex flex-col bg-white sm:inset-auto sm:bottom-5 sm:right-6 sm:h-[min(640px,calc(100vh-40px))] sm:w-[400px] sm:rounded-2xl sm:border sm:border-line sm:shadow-2xl">
+        <div role="dialog" aria-label="Ask the AI staff" className="fixed inset-x-0 top-0 z-50 flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden bg-white sm:inset-auto sm:bottom-5 sm:right-6 sm:h-[min(640px,calc(100vh-40px))] sm:w-[400px] sm:rounded-2xl sm:border sm:border-line sm:shadow-2xl">
           <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
             <div className="min-w-0">
               <div className="text-[17px] font-bold leading-tight">Ask the AI staff</div>

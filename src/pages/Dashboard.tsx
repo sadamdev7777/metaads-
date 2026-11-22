@@ -38,10 +38,10 @@ function Delta({ value, good, versus }: { value: number | null; good: "up" | "do
 
 function Tile({ label, value, sub, children, accent = false }: { label: string; value: ReactNode; sub?: ReactNode; children?: ReactNode; accent?: boolean }) {
   return (
-    <div className={`flex min-w-0 flex-col gap-1.5 rounded-xl border p-4 sm:p-5 ${accent ? "border-brand bg-[#F1F8F5]" : "border-line bg-white"}`}>
-      <div className="text-[12px] font-bold uppercase tracking-wide text-muted">{label}</div>
-      <div className="text-[26px] font-bold leading-none sm:text-[30px]">{value}</div>
-      {sub && <div className="text-[13px] text-muted">{sub}</div>}
+    <div className={`flex min-w-0 flex-col gap-1 rounded-xl border p-3 sm:gap-1.5 sm:p-5 ${accent ? "border-brand bg-[#F1F8F5]" : "border-line bg-white"}`}>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-muted sm:text-[12px]">{label}</div>
+      <div className="text-[20px] font-bold leading-none sm:text-[30px]">{value}</div>
+      {sub && <div className="text-[12px] leading-snug text-muted sm:text-[13px]">{sub}</div>}
       {children}
     </div>
   );
@@ -64,6 +64,7 @@ export default function Dashboard() {
   const cost = useCountryCost(30);
   const [key, setKey] = useState<Key>("week");
   const [report, setReport] = useState<Report | null>(null);
+  const [whole, setWhole] = useState(false);
   const [pending, setPending] = useState(0);
   const [aiOn, setAiOn] = useState(false);
   useEffect(() => {
@@ -100,14 +101,14 @@ export default function Dashboard() {
     <>
       <PageHead title="Dashboard" sub={`${today}. Meta figures as of ${when(t?.last_good_sync)}.`} />
 
-      {error && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]">Could not load the figures: {error}</div>}
+      {error && <div className="rounded-xl bg-[#FBE6E3] px-3.5 py-3 sm:px-5 sm:py-4 text-sm text-[#A3231B]">Could not load the figures: {error}</div>}
       {failed && (
-        <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]">
+        <div className="rounded-xl bg-[#FBE6E3] px-3.5 py-3 sm:px-5 sm:py-4 text-sm text-[#A3231B]">
           <B>The last sync with Meta failed.</B> {t?.last_sync?.error} Figures below are from the last good sync.
         </div>
       )}
       {untagged.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brand px-5 py-4 text-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brand px-3.5 py-3 text-white sm:px-5 sm:py-4">
           <div>
             <div className="text-lg font-bold">
               {untagged.length} running campaign{untagged.length === 1 ? "" : "s"} not tagged
@@ -139,7 +140,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           <Tile accent label="Paid deposit" value={d ? `${count(d.pax)} pax` : "…"} sub={d ? `${count(d.bookings)} ${d.bookings === 1 ? "booking" : "bookings"}` : ""}>
             <Delta value={d ? change(d.pax, d.prev.pax) : null} good="up" versus={versus} />
           </Tile>
@@ -196,7 +197,12 @@ export default function Dashboard() {
         >
           {report ? (
             <>
-              <div className="text-[15px] leading-relaxed">{report.summary}</div>
+              <div className={`text-sm leading-snug sm:text-[15px] sm:leading-relaxed ${whole ? "" : "line-clamp-4 sm:line-clamp-none"}`}>{report.summary}</div>
+              {report.summary.length > 220 && (
+                <button type="button" onClick={() => setWhole(!whole)} className="self-start border-0 bg-transparent p-0 text-[13px] font-semibold text-brand underline sm:hidden">
+                  {whole ? "Show less" : "Read all"}
+                </button>
+              )}
               <div className="mt-auto flex flex-wrap gap-2 pt-1">
                 <Link to="/approvals" className={linkBtn}>
                   {pending > 0 ? `Review ${pending} proposal${pending === 1 ? "" : "s"}` : "Open Approvals"}
@@ -214,18 +220,18 @@ export default function Dashboard() {
         <Card className="lg:col-span-2" title="AI staff" right={<Link to="/ai-office" className={cardLink}>Open AI Office</Link>}>
           <ul className="m-0 flex list-none flex-col divide-y divide-line p-0">
             {STAFF.map((s) => {
-              const on = s.who === "data" || s.who === "ads" || s.who === "plan" || aiOn || (s.who === "ana" && Boolean(report));
+              const on = s.who === "sch" ? false : s.who === "data" || s.who === "ads" || s.who === "plan" || aiOn || (s.who === "ana" && Boolean(report));
               const note = s.who === "data" ? `Last sync ${when(t?.last_good_sync)}` : s.who === "ana" && report ? `Last study ${when(report.created_at)}` : s.who === "ana" && aiOn ? "First study at 02:10 tonight" : s.who === "bud" && aiOn ? "Plans the budget every morning at 06:30" : s.who === "cre" && aiOn ? "Reviews creatives Monday and Thursday" : s.starts;
               return (
-                <li key={s.who} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                  <Avatar who={s.who} state={on ? "work" : "idle"} size={40} />
+                <li key={s.who} className="flex items-center gap-2.5 py-2 first:pt-0 last:pb-0">
+                  <Avatar who={s.who} state={on ? "work" : "idle"} size={32} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold">
                       {s.name} <span className="font-normal text-muted">· {s.role}</span>
                     </div>
                     <div className="truncate text-[13px] text-muted">{note}</div>
                   </div>
-                  <Pill tone={on ? "g" : "n"}>{s.who === "ads" || s.who === "plan" ? "On call" : on ? "Running" : "Not started"}</Pill>
+                  <Pill tone={on ? "g" : "n"}>{s.who === "sch" ? "By schedule" : s.who === "ads" || s.who === "plan" ? "On call" : on ? "Running" : "Not started"}</Pill>
                 </li>
               );
             })}

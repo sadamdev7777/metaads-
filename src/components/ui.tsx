@@ -45,14 +45,14 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={`flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-white p-5 ${className}`}>
+    <section className={`flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-white p-3.5 sm:gap-2.5 sm:p-5 ${className}`}>
       {(title || right) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {title && <h2 className="m-0 text-lg font-bold">{title}</h2>}
+          {title && <h2 className="m-0 text-base font-bold sm:text-lg">{title}</h2>}
           {right}
         </div>
       )}
-      {sub && <p className="m-0 text-sm text-muted">{sub}</p>}
+      {sub && <p className="m-0 text-[13px] leading-snug text-muted sm:text-sm">{sub}</p>}
       {children}
     </section>
   );
@@ -105,16 +105,16 @@ export function T({ heads, rows, right = [], minW = 640 }: { heads: ReactNode[];
     <>
       <ul className="m-0 flex list-none flex-col divide-y divide-line p-0 sm:hidden">
         {rows.map((r, ri) => (
-          <li key={ri} className="flex flex-col gap-1.5 px-2 py-3">
+          <li key={ri} className="flex flex-col gap-1 px-1 py-2">
             <div className="text-sm">{r[0]}</div>
-            <dl className="m-0 grid grid-cols-3 gap-x-3 gap-y-1.5">
+            <dl className="m-0 flex flex-wrap items-center gap-x-3 gap-y-0.5">
               {r.slice(1).map((c, i) =>
                 empty(c) ? null : empty(heads[i + 1]) ? (
-                  <div key={i} className="col-span-3 pt-0.5">{c}</div>
+                  <div key={i} className="basis-full pt-0.5">{c}</div>
                 ) : (
-                  <div key={i} className="min-w-0">
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{heads[i + 1]}</dt>
-                    <dd className="m-0 break-words text-sm">{c}</dd>
+                  <div key={i} className="flex min-w-0 items-center gap-1">
+                    <dt className="text-[11px] text-muted">{heads[i + 1]}</dt>
+                    <dd className="m-0 break-words text-[13px] font-semibold">{c}</dd>
                   </div>
                 ),
               )}
@@ -158,10 +158,10 @@ export const Mini = ({ children }: { children: ReactNode }) => <div className="m
 
 export function Stat({ label, value, sub, extra }: { label: string; value: ReactNode; sub?: ReactNode; extra?: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-1 basis-[calc(50%-0.5rem)] flex-col gap-1 rounded-xl border border-line bg-white p-4 sm:min-w-[180px] sm:basis-0 sm:gap-1.5 sm:p-5">
-      <div className="text-[13px] font-semibold text-muted">{label}</div>
-      <div className="text-[22px] font-bold leading-tight sm:text-[28px]">{value}</div>
-      {sub && <div className="text-[13px] text-muted">{sub}</div>}
+    <div className="flex min-w-0 flex-1 basis-[calc(50%-0.5rem)] flex-col gap-1 rounded-xl border border-line bg-white p-3 sm:min-w-[180px] sm:basis-0 sm:gap-1.5 sm:p-5">
+      <div className="text-[12px] font-semibold text-muted sm:text-[13px]">{label}</div>
+      <div className="text-[19px] font-bold leading-tight sm:text-[28px]">{value}</div>
+      {sub && <div className="text-[12px] leading-snug text-muted sm:text-[13px]">{sub}</div>}
       {extra}
     </div>
   );
@@ -335,8 +335,8 @@ export function PageHead({ title, sub, right }: { title: string; sub?: ReactNode
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="m-0 text-[28px] font-bold leading-tight">{title}</h1>
-        {sub && <div className="mt-1 text-sm text-muted">{sub}</div>}
+        <h1 className="m-0 text-[21px] font-bold leading-tight sm:text-[28px]">{title}</h1>
+        {sub && <div className="mt-0.5 text-[13px] leading-snug text-muted sm:mt-1 sm:text-sm">{sub}</div>}
       </div>
       {right}
     </div>

@@ -26,7 +26,7 @@ function Fig({ label, value, sub }: { label: string; value: ReactNode; sub?: Rea
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-white p-4">
       <div className="text-[12px] font-bold uppercase tracking-wide text-muted">{label}</div>
-      <div className="text-[24px] font-bold leading-none">{value}</div>
+      <div className="text-[19px] font-bold leading-none sm:text-[24px]">{value}</div>
       {sub && <div className="text-[13px] text-muted">{sub}</div>}
     </div>
   );
@@ -120,7 +120,7 @@ export default function Analysis() {
         }
       />
 
-      {error && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]">Could not load the figures: {error}</div>}
+      {error && <div className="rounded-xl bg-[#FBE6E3] px-3.5 py-3 sm:px-5 sm:py-4 text-sm text-[#A3231B]">Could not load the figures: {error}</div>}
 
       {/* 1. The period in four figures */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

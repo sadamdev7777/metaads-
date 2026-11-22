@@ -292,7 +292,7 @@ function Destinations() {
 
   return (
     <>
-      <div className="rounded-xl bg-[#E6F1EE] px-5 py-4 text-sm">
+      <div className="rounded-xl bg-[#E6F1EE] px-3.5 py-3 sm:px-5 sm:py-4 text-sm">
         <B>How it works.</B> A campaign or a TravelCRM package belongs to a destination when its name contains the destination name or one of its
         words. Name new campaigns <B>Country - Destination date - Staff</B> (for example “Korea - Winter 1/12 - Haniss”) and they match by themselves.
         Change this list any time: every report follows.

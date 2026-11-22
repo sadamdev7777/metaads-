@@ -116,7 +116,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main key={loc.pathname} className="flex min-w-0 flex-1 flex-col gap-5 px-4 pb-12 pt-6 md:px-7 md:pt-7">
+      <main key={loc.pathname} className="flex min-w-0 flex-1 flex-col gap-3.5 px-3 pb-24 pt-4 sm:gap-5 sm:px-4 sm:pt-6 md:px-7 md:pt-7">
         {demo && (
           <div className="rounded-xl bg-[#FBEFD5] px-4 py-3 text-sm text-[#5C3900]">
             <span className="font-bold">Demo mode.</span> Supabase is not connected in this build, so sign-in is not checked and the activity log

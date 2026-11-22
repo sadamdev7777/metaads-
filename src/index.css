@@ -13,6 +13,24 @@ a {
   color: #0f5c4d;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  overflow-x: clip;
+}
+/* Phones: iOS zooms the whole page when a field's text is under 16px, which pushes everything off the screen. */
+@media (max-width: 639px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+/* While the chat covers a phone screen, the page behind must not scroll. */
+body.chat-open {
+  overflow: hidden;
+}
+
 @keyframes mtbpulse {
   0% { box-shadow: 0 0 0 0 rgba(30, 158, 90, 0.65); }
   100% { box-shadow: 0 0 0 10px rgba(30, 158, 90, 0); }

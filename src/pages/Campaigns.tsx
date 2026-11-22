@@ -135,10 +135,10 @@ export default function Campaigns() {
       />
 
       <ScheduleStrip />
-      {error && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]">Could not load campaigns: {error}</div>}
+      {error && <div className="rounded-xl bg-[#FBE6E3] px-3.5 py-3 sm:px-5 sm:py-4 text-sm text-[#A3231B]">Could not load campaigns: {error}</div>}
 
       {untagged.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-[#FBEFD5] px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-[#FBEFD5] px-3.5 py-3 sm:px-5 sm:py-4">
           <div className="min-w-0 flex-[1_1_360px]">
             <div className="text-sm font-bold text-[#5C3900]">
               {untagged.length} running campaign{untagged.length === 1 ? " is" : "s are"} not matched to a destination

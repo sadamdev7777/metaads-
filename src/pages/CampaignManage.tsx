@@ -111,7 +111,7 @@ export default function CampaignManage() {
       </div>
 
       {brief && (
-        <div className="rounded-xl bg-[#E6F1EE] px-5 py-4 text-sm">
+        <div className="rounded-xl bg-[#E6F1EE] px-3.5 py-3 sm:px-5 sm:py-4 text-sm">
           <B>Anis's brief is loaded.</B> Hook: “{brief.hook}”. Choose the ad set below and press Add ad: her text is filled in for you.
           {brief.concept && <div className="mt-1 text-muted">What to show: {brief.concept}</div>}
         </div>

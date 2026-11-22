@@ -87,7 +87,7 @@ export default function AIOffice() {
         }
       />
 
-      {aiNote && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]"><B>Luqman's last study did not finish.</B> {aiNote} Press Study the ads now to try again.</div>}
+      {aiNote && <div className="rounded-xl bg-[#FBE6E3] px-3.5 py-3 sm:px-5 sm:py-4 text-sm text-[#A3231B]"><B>Luqman's last study did not finish.</B> {aiNote} Press Study the ads now to try again.</div>}
 
       <ScheduleStrip />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
