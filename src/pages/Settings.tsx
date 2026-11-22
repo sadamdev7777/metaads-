@@ -27,13 +27,13 @@ export default function Settings() {
   return (
     <>
       <PageHead title="Settings" sub={`${current.label}: ${current.sub}`} />
-      <nav aria-label="Settings sections" className="flex flex-wrap gap-1 border-b border-line">
+      <nav aria-label="Settings sections" className="-mx-3 flex gap-0.5 overflow-x-auto border-b border-line px-3 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:gap-1 sm:px-0">
         {TABS.map((t) => (
           <NavLink
             key={t.key}
             to={`/settings/${t.key}`}
             className={({ isActive }) =>
-              `flex min-h-[36px] sm:min-h-[44px] items-center border-b-[3px] px-4 text-sm no-underline ${isActive ? "border-brand font-bold text-brand" : "border-transparent font-medium text-muted"}`
+              `flex min-h-[40px] flex-none items-center whitespace-nowrap border-b-[3px] px-2.5 text-[13px] no-underline sm:min-h-[44px] sm:px-4 sm:text-sm ${isActive ? "border-brand font-bold text-brand" : "border-transparent font-medium text-muted"}`
             }
           >
             {t.label}
@@ -140,12 +140,12 @@ function Rules() {
       </div>
 
       <Card title="Cost and timing limits">
-        <div className="flex flex-wrap gap-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:gap-4">
           <Field id="r1" label="Target cost per pax (RM)" value={r.target_cost_per_pax} onChange={set("target_cost_per_pax")} note="Below this, budget is raised" />
           <Field id="r2" label="Cost per pax limit (RM)" value={r.limit_cost_per_pax} onChange={set("limit_cost_per_pax")} note="Above this, the ad is turned off" />
           <Field id="r3" label="Monthly budget (RM)" value={r.monthly_budget} onChange={set("monthly_budget")} />
         </div>
-        <div className="flex flex-wrap gap-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:gap-4">
           <Field id="r4" label="Close window (days)" value={r.close_window_days} onChange={set("close_window_days")} note="Starting assumption for all products" />
           <Field id="r5" label="Full payment (days before departure)" value={r.full_payment_days} onChange={set("full_payment_days")} note="KPI: departure full before this" />
           <Field id="r6" label="Minimum pax before an ad set is judged" value={r.min_pax_to_judge} onChange={set("min_pax_to_judge")} note="Suggested value, to confirm" />
@@ -185,15 +185,15 @@ function Rules() {
       </Card>
 
       <Card title="Safety limits" sub="These are limits on the system and the AI staff, not on people. They are the only guard if something is approved by mistake.">
-        <div className="flex flex-wrap gap-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:gap-4">
           <Field id="s1" label="Maximum budget increase per day (%)" value={r.max_budget_increase_pct} onChange={set("max_budget_increase_pct")} note={todo} />
           <Field id="s2" label="Starting budget for a new campaign (RM)" value={r.new_campaign_start_budget} onChange={set("new_campaign_start_budget")} note={todo} />
           <Field id="s3" label="Overall daily spend limit (RM)" value={r.daily_spend_limit} onChange={set("daily_spend_limit")} note={todo} />
         </div>
-        <div className="flex flex-wrap gap-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:gap-4">
           <Field id="s4" label="Maximum actions per day" value={r.max_actions_per_day} onChange={set("max_actions_per_day")} note={todo} />
           <Field id="s5" label="Lead gap that triggers an alert (%)" value={r.lead_gap_alert_pct} onChange={set("lead_gap_alert_pct")} note={todo} />
-          <div className="hidden min-w-[200px] flex-1 md:block" />
+          <div className="hidden min-w-[200px] flex-1 md:block" aria-hidden="true" />
         </div>
       </Card>
     </>
@@ -486,28 +486,9 @@ function Integrations() {
   }, []);
 
   const working = rows.filter((r) => r.status === "connected").length + (db.ok ? 1 : 0);
-
-  return (
-    <>
-      <Card>
-        <div className="text-[15px] font-bold">
-          {working} of {rows.length + 1} connections are working
-        </div>
-        <div className="text-[13px] text-muted">
-          This is the real status. If a required connection fails, Auto mode stops and returns to Approval.
-        </div>
-      </Card>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Supabase" right={db.ok ? <Pill tone="g">Connected</Pill> : <Pill tone="r">Not connected</Pill>}>
-          <div className="text-sm">Database, sign-in and activity log.</div>
-          <div className="text-[13px] text-muted">{db.detail}</div>
-          <div className="mt-auto flex justify-end">
-            <Btn kind="s" onClick={() => void load(true)} disabled={!supabase}>
-              Test connection
-            </Btn>
-          </div>
-        </Card>
-        {rows.map((r) =>
+  const [showLater, setShowLater] = useState(false);
+  const later = rows.filter((r) => r.status === "not_set_up" && r.key !== "travelcrm");
+  const cardFor = (r: Integ) =>
           r.key === "meta_ads" ? (
             <MetaAdsCard key={r.key} row={r} reload={() => load(false)} />
           ) : r.key === "ai_model" ? (
@@ -528,9 +509,42 @@ function Integrations() {
                 </Btn>
               </div>
             </Card>
-          ),
-        )}
+          );
+
+  return (
+    <>
+      <Card>
+        <div className="text-[15px] font-bold">
+          {working} of {rows.length + 1} connections are working
+        </div>
+        <div className="text-[13px] text-muted">
+          This is the real status. If a required connection fails, Auto mode stops and returns to Approval.
+        </div>
+      </Card>
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+        <Card title="Supabase" right={db.ok ? <Pill tone="g">Connected</Pill> : <Pill tone="r">Not connected</Pill>}>
+          <div className="text-sm">Database, sign-in and activity log.</div>
+          <div className="text-[13px] text-muted">{db.detail}</div>
+          <div className="mt-auto flex justify-end">
+            <Btn kind="s" onClick={() => void load(true)} disabled={!supabase}>
+              Test connection
+            </Btn>
+          </div>
+        </Card>
+        {rows.filter((r) => r.status !== "not_set_up" || r.key === "travelcrm").map(cardFor)}
       </div>
+      {later.length > 0 && (
+        <section className="flex flex-col gap-3 rounded-xl border border-dashed border-[#9AA39E] bg-white px-3.5 py-3 sm:px-5 sm:py-4">
+          <button type="button" aria-expanded={showLater} onClick={() => setShowLater(!showLater)} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left">
+            <span className="min-w-0">
+              <span className="block text-[15px] font-bold">Not set up yet ({later.length})</span>
+              <span className="block text-[12px] text-muted sm:text-[13px]">{later.map((r) => r.name).join(", ")}</span>
+            </span>
+            <span className="flex-none text-[13px] font-semibold text-brand">{showLater ? "Hide" : "Set up"}</span>
+          </button>
+          {showLater && <div className="grid gap-3 sm:gap-4 md:grid-cols-2">{later.map(cardFor)}</div>}
+        </section>
+      )}
     </>
   );
 }
@@ -1082,7 +1096,7 @@ function Users() {
     void refresh();
   }, []);
 
-  const when = (iso: string) => new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const when = (iso?: string | null) => (iso && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "–");
   const list: typeof people = people.length ? people : user ? [{ email: user.email, name: user.name, created_at: new Date().toISOString() }] : [];
 
   return (

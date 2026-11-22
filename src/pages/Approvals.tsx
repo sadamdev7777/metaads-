@@ -78,27 +78,27 @@ export default function Approvals() {
 
       <Card title="Who works on this page">
         <div className="text-sm">
-          <B>4 AI staff.</B> Three of them propose, one carries out. Nothing changes in Meta until you confirm.
+          <B>4 AI staff.</B> Luqman, Bakri and Anis propose; Adam makes the change in Meta, only after you confirm.
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-2 xl:grid-cols-4">
           {TEAM.map((t) => {
             const n = t.key ? count(t.key) : 0;
             const on = Boolean(t.key) && who === t.key;
             const inner = (
               <>
-                <Avatar who={t.who} state={n ? "wait" : "idle"} size={40} />
+                <Avatar who={t.who} state={n ? "wait" : "idle"} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className="text-[15px] font-bold text-ink">{t.name}</span>
-                    <span className="text-[12px] font-semibold text-brand">{t.role}</span>
-                    {t.key && <span className={`ml-auto rounded-full px-2 py-0.5 text-[12px] font-bold ${n ? "bg-[#FBEFD5] text-[#5C3900]" : "bg-ground text-muted"}`}>{n} waiting</span>}
+                    <span className="text-[14px] font-bold text-ink sm:text-[15px]">{t.name}</span>
+                    <span className="text-[11px] font-semibold text-brand sm:text-[12px]">{t.role}</span>
+                    {t.key && <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold sm:ml-auto sm:px-2 sm:text-[12px] ${n ? "bg-[#FBEFD5] text-[#5C3900]" : "bg-ground text-muted"}`}>{n} waiting</span>}
                   </span>
-                  <span className="mt-0.5 block text-[13px] leading-snug text-ink">{t.does}</span>
-                  <span className="mt-0.5 block text-[12px] text-muted">{t.when}</span>
+                  <span className="mt-0.5 hidden text-[13px] leading-snug text-ink sm:block">{t.does}</span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-muted sm:text-[12px]">{t.when}</span>
                 </span>
               </>
             );
-            const box = `flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left ${on ? "border-brand bg-[#E6F1EE]" : "border-line bg-white"}`;
+            const box = `flex w-full items-start gap-2 rounded-lg border px-2 py-2 text-left sm:gap-2.5 sm:px-3 sm:py-2.5 ${on ? "border-brand bg-[#E6F1EE]" : "border-line bg-white"}`;
             return t.key ? (
               <button key={t.name} type="button" aria-pressed={on} onClick={() => setWho(on ? "" : t.key)} className={box}>
                 {inner}

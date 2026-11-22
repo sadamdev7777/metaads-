@@ -22,6 +22,17 @@ export default function AIOffice() {
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<Report | null>(null);
   const [sched, setSched] = useState<SchedSettings | null>(null);
+  // On a phone the long parts start folded; on a computer everything shows.
+  const [unfold, setUnfold] = useState<Record<string, boolean>>({});
+  const isOpen = (k: string) => Boolean(unfold[k]);
+  const phone = typeof window !== "undefined" && window.innerWidth < 640;
+  const toggle = (k: string) => setUnfold((u) => ({ ...u, [k]: !u[k] }));
+  const fold = (k: string) => (isOpen(k) ? "" : "hidden sm:flex");
+  const More = ({ k, label }: { k: string; label: string }) => (
+    <button type="button" onClick={() => toggle(k)} className="self-start border-0 bg-transparent p-0 text-[13px] font-semibold text-brand underline sm:hidden">
+      {isOpen(k) ? "Show less" : label}
+    </button>
+  );
   const [review, setReview] = useState<Report | null>(null);
   const [working, setWorking] = useState("");
   async function ask(fn: "budget-planner" | "creative-analyst", name: string, what: string) {
@@ -90,24 +101,28 @@ export default function AIOffice() {
       {aiNote && <div className="rounded-xl bg-[#FBE6E3] px-3.5 py-3 sm:px-5 sm:py-4 text-sm text-[#A3231B]"><B>Luqman's last study did not finish.</B> {aiNote} Press Study the ads now to try again.</div>}
 
       <ScheduleStrip />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
         {STAFF.map((s) => {
           const on = s.who === "sch" ? Boolean(sched?.enabled) : s.who === "data" || s.who === "ads" || s.who === "plan" || aiOn;
           return (
             <Card key={s.who}>
-              <div className="flex items-center gap-3.5">
-                <Avatar who={s.who} state={on ? "work" : "idle"} size={64} />
-                <div className="min-w-0">
-                  <h2 className="m-0 text-lg font-bold">{s.name}</h2>
-                  <div className="text-[13px] text-muted">{s.role}</div>
+              <div className="flex items-center gap-2.5 sm:gap-3.5">
+                <span className="sm:hidden"><Avatar who={s.who} state={on ? "work" : "idle"} size={40} /></span>
+                <span className="hidden sm:block"><Avatar who={s.who} state={on ? "work" : "idle"} size={64} /></span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="m-0 text-[15px] font-bold leading-tight sm:text-lg">{s.name} <span className="text-[12px] font-normal text-muted sm:hidden">· {s.role}</span></h2>
+                  <div className="hidden text-[13px] text-muted sm:block">{s.role}</div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     <Pill tone={s.who === "sch" && sched?.enabled && sched.dry_run ? "a" : on ? "g" : "n"}>{s.who === "sch" ? (!sched?.enabled ? "Off" : sched.dry_run ? "Show-only" : "On") : s.who === "ads" || s.who === "plan" ? "On call" : on ? "Running" : "Not started"}</Pill>
                     <Pill>{s.kind}</Pill>
                   </div>
                 </div>
+                <button type="button" aria-expanded={isOpen(`job-${s.who}`)} onClick={() => toggle(`job-${s.who}`)} className="flex-none border-0 bg-transparent p-0 text-[12px] font-semibold text-brand sm:hidden">
+                  {isOpen(`job-${s.who}`) ? "Less" : "About"}
+                </button>
               </div>
-              <div className="text-[13px] text-muted">{s.job}</div>
-              <div className="mt-auto rounded-lg bg-ground px-3 py-2.5 text-sm">
+              <div className={`text-[13px] text-muted ${isOpen(`job-${s.who}`) ? "" : "hidden sm:block"}`}>{s.job}</div>
+              <div className="mt-auto rounded-lg bg-ground px-2.5 py-2 text-[12px] sm:px-3 sm:py-2.5 sm:text-sm">
                 {s.who === "sch" ? (
                   <>{sched?.last_tick_at ? `Last check ${when(sched.last_tick_at)}: ${sched.last_tick_note}` : "No check yet."} <Link to="/settings/ad-schedule">Set her rules</Link></>
                 ) : s.who === "data" ? (
@@ -149,11 +164,12 @@ export default function AIOffice() {
         >
           {a.rep ? (
             <>
-              <div className="text-[15px] leading-relaxed">{a.rep.summary}</div>
+              <div className={`text-sm leading-snug sm:text-[15px] sm:leading-relaxed ${isOpen(a.key) ? "" : "line-clamp-4 sm:line-clamp-none"}`}>{a.rep.summary}</div>
+              <More k={a.key} label={`Read all${a.rep.findings?.length ? ` and ${a.rep.findings.length} findings` : ""}`} />
               {a.rep.findings?.length > 0 && (
-                <div className="grid gap-2.5 md:grid-cols-2">
+                <div className={`${fold(a.key)} grid flex-col gap-2 sm:gap-2.5 md:grid-cols-2`}>
                   {a.rep.findings.map((f, i) => (
-                    <div key={i} className="rounded-lg bg-ground px-3 py-2.5 text-sm">
+                    <div key={i} className="rounded-lg bg-ground px-2.5 py-2 text-[13px] sm:px-3 sm:py-2.5 sm:text-sm">
                       <B>{f.title}</B>
                       <div className="whitespace-pre-line">{f.detail}</div>
                     </div>
@@ -174,11 +190,12 @@ export default function AIOffice() {
       >
         {report ? (
           <>
-            <div className="text-[15px] leading-relaxed">{report.summary}</div>
+            <div className={`text-sm leading-snug sm:text-[15px] sm:leading-relaxed ${isOpen("luqman") ? "" : "line-clamp-4 sm:line-clamp-none"}`}>{report.summary}</div>
+            <More k="luqman" label={`Read all${report.findings?.length ? ` and ${report.findings.length} findings` : ""}`} />
             {report.findings?.length > 0 && (
-              <div className="flex flex-col gap-2.5">
+              <div className={`${fold("luqman")} flex-col gap-2 sm:gap-2.5`}>
                 {report.findings.map((f, i) => (
-                  <div key={i} className="rounded-lg bg-ground px-3 py-2.5 text-sm">
+                  <div key={i} className="rounded-lg bg-ground px-2.5 py-2 text-[13px] sm:px-3 sm:py-2.5 sm:text-sm">
                     <B>{f.title}</B>
                     <div>{f.detail}</div>
                   </div>
@@ -186,14 +203,14 @@ export default function AIOffice() {
               </div>
             )}
             {report.review?.length > 0 && (
-              <>
+              <div className={`${fold("luqman")} flex-col gap-2`}>
                 <div className="text-[13px] font-semibold text-muted">How his earlier advice turned out</div>
                 <T
                   minW={640}
                   heads={["Earlier proposal", "Verdict", "What happened"]}
                   rows={report.review.map((r) => [r.proposal, <Pill tone={r.verdict === "right" ? "g" : r.verdict === "wrong" ? "r" : "n"}>{r.verdict}</Pill>, r.detail])}
                 />
-              </>
+              </div>
             )}
             <div>
               <Link to="/approvals" className="inline-flex min-h-[36px] sm:min-h-[44px] items-center rounded-lg border border-[#9AA39E] px-4 text-sm font-semibold text-ink no-underline">
@@ -212,7 +229,7 @@ export default function AIOffice() {
           <T
             minW={760}
             heads={["Lesson", "Evidence", "Confidence", "Learned", ""]}
-            rows={lessons.map((l) => [
+            rows={(isOpen("notes") || !phone ? lessons : lessons.slice(0, 3)).map((l) => [
               <B>{l.lesson}</B>,
               l.evidence,
               <Pill tone={confTone(l.confidence)}>{l.confidence ?? ""}</Pill>,
@@ -225,13 +242,14 @@ export default function AIOffice() {
         ) : (
           <div className="text-sm text-muted">Empty. Lessons appear after his first study.</div>
         )}
+        {phone && lessons.length > 3 && <More k="notes" label={`Show all ${lessons.length} lessons`} />}
       </Card>
 
       <Card title="Dara's log" sub="Every sync with Meta, newest first.">
         <T
           minW={760}
           heads={["Started", "Started by", "Result", "Details"]}
-          rows={runs.map((r) => [
+          rows={(isOpen("runs") || !phone ? runs : runs.slice(0, 4)).map((r) => [
             when(r.started_at),
             r.triggered_by === "schedule" ? "Schedule" : r.triggered_by ?? "",
             r.ok === null ? Date.now() - new Date(r.started_at).getTime() > 300000 ? <Pill>Stopped early</Pill> : <Pill tone="a">Running</Pill> : r.ok ? <Pill tone="g">Done</Pill> : <Pill tone="r">Failed</Pill>,
@@ -239,6 +257,7 @@ export default function AIOffice() {
           ])}
         />
         {runs.length === 0 && <div className="text-sm text-muted">No sync has run yet.</div>}
+        {phone && runs.length > 4 && <More k="runs" label={`Show all ${runs.length} syncs`} />}
       </Card>
     </>
   );

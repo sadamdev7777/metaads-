@@ -51,6 +51,7 @@ export default function Campaigns() {
   }, []);
   const COUNTRIES = useMemo(() => Array.from(new Set(dests.map((d) => d.country))).sort(), [dests]);
   const [busy, setBusy] = useState(false);
+  const [filters, setFilters] = useState(false);
 
   const people = useMemo(() => Array.from(new Set(data.map((c) => c.run_by).filter(Boolean) as string[])).sort(), [data]);
   const rows = useMemo(() => {
@@ -117,6 +118,27 @@ export default function Campaigns() {
   }
 
   const last = totals.data?.last_good_sync;
+  const activeFilters = [show !== "Active or with spend", country !== "All countries", runBy !== "Everyone", q.trim() !== ""].filter(Boolean).length;
+  type PhoneRegion = { key: string; name: string; items: typeof rows; spend: number; leads: number };
+  const phoneSections = rows.slice(0, shown).reduce<{ key: string; country: string | null; running: number; spend: number; regions: PhoneRegion[] }[]>((out, c) => {
+    let sec = out[out.length - 1];
+    if (!sec || sec.country !== (c.country ?? null)) {
+      const all = rows.filter((x) => (x.country ?? null) === (c.country ?? null));
+      sec = { key: c.country ?? "none", country: c.country ?? null, running: all.filter((x) => x.delivery_status === "ACTIVE").length, spend: all.reduce((n, x) => n + x.spend, 0), regions: [] };
+      out.push(sec);
+    }
+    const rk = c.destination_id ?? "none";
+    let reg = sec.regions[sec.regions.length - 1];
+    if (!reg || reg.key !== rk) {
+      const name = !c.destination ? "No region" : c.destination.toLowerCase() === (c.country ?? "").toLowerCase() ? "Whole country" : c.destination.replace(new RegExp(`^${c.country}\\s*[-–:]\\s*`, "i"), "");
+      const all = rows.filter((x) => (x.destination_id ?? "none") === rk && (x.country ?? null) === (c.country ?? null));
+      reg = { key: rk, name, items: [], spend: all.reduce((n, x) => n + x.spend, 0), leads: all.reduce((n, x) => n + x.leads, 0) };
+      sec.regions.push(reg);
+    }
+    reg.items.push(c);
+    return out;
+  }, []);
+
   return (
     <>
       <PageHead
@@ -166,7 +188,7 @@ export default function Campaigns() {
       )}
 
       <Card title="By country" sub={`What is running now, and where there is no ad. ${noAds.length ? `${noAds.length} ${noAds.length === 1 ? "country has" : "countries have"} no ad running.` : "Every country has an ad running."} Tap a country to see only its campaigns.`}>
-        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
           {byCountry.map((c) => {
             const on = country === c.name;
             return (
@@ -175,13 +197,13 @@ export default function Campaigns() {
                 type="button"
                 aria-pressed={on}
                 onClick={() => { setCountry(on ? "All countries" : c.name); if (!on && c.running === 0) setShow("Everything"); setShown(PAGE); }}
-                className={`flex min-w-0 flex-col gap-1 rounded-xl border-2 p-3 text-left ${on ? "border-brand bg-[#F1F8F5]" : c.running === 0 ? "border-[#E8C98A] bg-[#FDF6E7]" : "border-line bg-white"}`}
+                className={`flex min-w-0 flex-col gap-0.5 rounded-xl border-2 p-2.5 text-left sm:gap-1 sm:p-3 ${on ? "border-brand bg-[#F1F8F5]" : c.running === 0 ? "border-[#E8C98A] bg-[#FDF6E7]" : "border-line bg-white"}`}
               >
                 <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                   <span className="text-sm font-bold text-ink">{c.name}</span>
                   {c.running === 0 ? <Pill tone="a">No ads</Pill> : <Pill tone="g">{c.running} running</Pill>}
                 </span>
-                <span className="text-[13px] text-muted">{c.spend ? `${rm(c.spend)} · ${count(c.leads)} leads${c.leads ? ` · ${cpl(c.spend, c.leads)} each` : ""}` : "No spend in this period"}</span>
+                <span className="text-[12px] leading-snug text-muted sm:text-[13px]">{c.spend ? `${rm(c.spend)} · ${count(c.leads)} leads${c.leads ? ` · ${cpl(c.spend, c.leads)} each` : ""}` : "No spend in this period"}</span>
                 {(() => {
                   const quiet = c.bare.filter((r) => !c.toSell.includes(r));
                   return c.running > 0 && quiet.length > 0 ? (
@@ -197,12 +219,18 @@ export default function Campaigns() {
         </div>
       </Card>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <Pick id="cd" label="Period" value={days} onChange={setDays} options={PERIODS} />
+      <div className="flex items-end gap-2 sm:hidden">
+        <Pick id="cd-m" label="Period" value={days} onChange={setDays} options={PERIODS} />
+        <button type="button" aria-expanded={filters} onClick={() => setFilters(!filters)} className={`h-10 flex-none rounded-lg border px-3 text-[13px] font-semibold ${filters || activeFilters ? "border-brand bg-[#E6F1EE] text-ink" : "border-[#9AA39E] bg-white text-ink"}`}>
+          Filters{activeFilters ? ` (${activeFilters})` : ""}
+        </button>
+      </div>
+      <div className={`${filters ? "grid" : "hidden"} grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-4`}>
+        <div className="hidden sm:flex sm:min-w-[150px] sm:flex-1"><Pick id="cd" label="Period" value={days} onChange={setDays} options={PERIODS} /></div>
         <Pick id="cs" label="Show" value={show} onChange={(v) => { setShow(v); setShown(PAGE); }} options={["Active or with spend", "Active only", "Not tagged", "Everything"]} />
         <Pick id="cc" label="Country" value={country} onChange={(v) => { setCountry(v); setShown(PAGE); }} options={["All countries", ...COUNTRIES, "Not tagged"]} />
         <Pick id="cr" label="Run by" value={runBy} onChange={(v) => { setRunBy(v); setShown(PAGE); }} options={["Everyone", ...people]} />
-        <div className="flex min-w-[200px] flex-[2_1_220px] flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5 sm:min-w-[200px] sm:flex-[2_1_220px]">
           <label htmlFor="cq" className="text-[13px] font-semibold">
             Search name
           </label>
@@ -210,7 +238,79 @@ export default function Campaigns() {
         </div>
       </div>
 
-      <Card className="!p-2">
+      {/* Phones: one short block per campaign, under its country and region. */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        <div className="text-[12px] text-muted">
+          {loading ? "Loading…" : `${spanText(range)}. ${count(rows.length)} campaign${rows.length === 1 ? "" : "s"} · ${rm(sum.spend)} · ${count(sum.leads)} leads${sum.leads ? ` · ${cpl(sum.spend, sum.leads)} each` : ""}`}
+        </div>
+        {phoneSections.map((sec) => (
+          <section key={sec.key} className="overflow-hidden rounded-xl border border-line bg-white">
+            <h2 className={`m-0 flex items-baseline justify-between gap-2 px-3 py-2 text-[13px] font-bold ${sec.country ? "bg-ground text-ink" : "bg-[#FBEFD5] text-[#5C3900]"}`}>
+              <span>{sec.country ?? "Not matched to a destination"}</span>
+              <span className="text-[12px] font-normal text-muted">{sec.running} running · {rm(sec.spend)}</span>
+            </h2>
+            {sec.regions.map((reg) => (
+              <div key={reg.key}>
+                {sec.country && (
+                  <div className="flex items-baseline justify-between gap-2 border-t border-line px-3 pb-0.5 pt-2 text-[12px]">
+                    <span className="font-bold text-brand">{reg.name}</span>
+                    <span className="text-muted">{reg.items.length} campaign{reg.items.length === 1 ? "" : "s"}{reg.leads ? ` · ${cpl(reg.spend, reg.leads)} a lead` : ""}</span>
+                  </div>
+                )}
+                <ul className="m-0 list-none divide-y divide-line p-0">
+                  {reg.items.map((c) => {
+                    const d = delivery(c.delivery_status);
+                    const editing = edit?.id === c.id;
+                    return (
+                      <li key={c.id} className="px-3 py-2">
+                        <div className="flex items-start gap-2">
+                          <Link to={`/campaigns/${c.id}`} className="min-w-0 flex-1 break-words text-sm font-bold leading-snug no-underline">{c.name}</Link>
+                          <Pill tone={d.tone}>{d.text}</Pill>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-muted">
+                          <span>{c.spend ? <b className="text-ink">{rm(c.spend)}</b> : "No spend"}</span>
+                          {c.leads ? <span><b className="text-ink">{count(c.leads)}</b> leads · <b className="text-ink">{cpl(c.spend, c.leads)}</b> each</span> : c.spend ? <span>no leads</span> : null}
+                          {c.daily_budget ? <span>RM{c.daily_budget}/day</span> : null}
+                          {c.run_by ? <span>by {c.run_by}</span> : null}
+                        </div>
+                        {editing ? (
+                          <div className="mt-2 flex flex-col gap-2 rounded-lg bg-[#F1F8F5] px-3 py-3">
+                            <DestPicker dests={dests} value={edit.dest} email={user?.email ?? ""} onChange={(id) => setEdit({ ...edit, dest: id })} onCreated={setDests} />
+                            <input aria-label="Run by" list="people" value={edit.runBy} onChange={(e) => setEdit({ ...edit, runBy: e.target.value })} placeholder="Run by (staff name)" className={`${INPUT} w-full`} />
+                            <div className="flex gap-2">
+                              <Btn small disabled={busy} onClick={() => void save(c)}>Save</Btn>
+                              <Btn small kind="s" disabled={busy} onClick={() => setEdit(null)}>Cancel</Btn>
+                            </div>
+                          </div>
+                        ) : (
+                          !c.destination_id && (
+                            <button type="button" onClick={() => setEdit({ id: c.id, dest: "", runBy: c.run_by ?? guessRunBy(c.name) ?? "" })} className="mt-1.5 min-h-[32px] rounded-lg border border-brand bg-brand px-2.5 text-[12px] font-semibold text-white">
+                              Set destination
+                            </button>
+                          )
+                        )}
+                        {!editing && c.destination_id && (
+                          <button type="button" onClick={() => setEdit({ id: c.id, dest: c.destination_id ?? "", runBy: c.run_by ?? guessRunBy(c.name) ?? "" })} className="mt-1 border-0 bg-transparent p-0 text-[12px] font-semibold text-brand underline">
+                            Change tag
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </section>
+        ))}
+        {!loading && rows.length === 0 && <div className="rounded-xl border border-line bg-white px-3 py-5 text-sm text-muted">No campaign matches these filters.</div>}
+        {rows.length > shown && (
+          <Btn kind="s" onClick={() => setShown((n) => n + PAGE)}>
+            Show {Math.min(PAGE, rows.length - shown)} more
+          </Btn>
+        )}
+      </div>
+
+      <Card className="hidden !p-2 sm:flex">
         <div className="px-3 pt-2 text-[13px] text-muted">
           {loading ? "Loading…" : `${spanText(range)}. ${count(rows.length)} campaign${rows.length === 1 ? "" : "s"}. Spend ${rm(sum.spend)}, leads ${count(sum.leads)}${sum.leads ? `, CPL ${cpl(sum.spend, sum.leads)}` : ""}.`}
         </div>

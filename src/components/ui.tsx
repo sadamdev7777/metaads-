@@ -202,8 +202,8 @@ export function Field({
   onChange?: (v: string) => void;
 }) {
   return (
-    <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] font-semibold">
+    <div className="flex min-w-0 flex-1 flex-col gap-1 sm:min-w-[200px] sm:gap-1.5">
+      <label htmlFor={id} className="flex min-h-[30px] items-end text-[12px] font-semibold leading-tight sm:min-h-0 sm:text-[13px]">
         {label}
       </label>
       {onChange ? (
@@ -211,7 +211,7 @@ export function Field({
       ) : (
         <input id={id} type={type} defaultValue={value} placeholder={placeholder} className={INPUT} />
       )}
-      {note && <div className="text-xs text-muted">{note}</div>}
+      {note && <div className="text-[11px] leading-snug text-muted sm:text-xs">{note}</div>}
     </div>
   );
 }
