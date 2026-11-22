@@ -10,7 +10,7 @@ import {
   ATTRIBUTION, BIDS, type Build, EVENTS, GOALS, OBJECTIVES, type Options, type SourceAd, type SourceSet, type WinSet, type Winners,
   PAGE_FIX, audienceFrom, audienceLine, blankBuild, builder, dm, loadSaved, problems, saveLocal, staffName, standardAudience,
 } from "../lib/build";
-import { type Destination, type MediaItem, adCreate, cpl, fetchDestinations, fetchMedia, rm, seatsFor, useCampaigns, useRpc } from "../lib/live";
+import { type Destination, type MediaItem, adCreate, cpl, fetchDestinations, fetchMedia, rm, seatsFor, useCampaigns, useCountryCost, useDashTotals, useDestinationCost, useRpc } from "../lib/live";
 import { useStore } from "../lib/store";
 
 type Line = { key: string; name: string; state: "wait" | "ok" | "fail"; note: string };
@@ -33,12 +33,16 @@ export default function CampaignBuild() {
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
   const [everything, setEverything] = useState(false);
+  const [pickCountry, setPickCountry] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [sure, setSure] = useState(false);
   const [run, setRun] = useState<Run>(IDLE);
   const [seats, setSeats] = useState<{ departures: number; seats: number; unknown: number; next: string | null } | null>(null);
   const win = useRpc<Winners>("campaign_winners", { p_days: 30 }, NONE);
   const camps = useCampaigns(30);
+  const countryCost = useCountryCost(30);
+  const destCost = useDestinationCost(30);
+  const dash = useDashTotals();
 
   useEffect(() => {
     void fetchDestinations().then(setDests);
@@ -58,9 +62,23 @@ export default function CampaignBuild() {
   const dest = dests.find((d) => d.id === b.dest);
   const place = dest ? (dest.name.toLowerCase() === dest.country.toLowerCase() ? dest.country : dest.name.replace(new RegExp(`^${dest.country}\\s*[-–:]\\s*`, "i"), "")) : "";
   const who = staffName(email);
-  const forDest = Boolean(b.dest) && !everything;
-  const sets = useMemo(() => win.data.ad_sets.filter((s) => !forDest || s.destination_id === b.dest), [win.data, forDest, b.dest]);
-  const ads = useMemo(() => win.data.ads.filter((a) => !forDest || a.destination_id === b.dest), [win.data, forDest, b.dest]);
+  // What to copy: the region chosen, else its country, else (only when asked) the whole account.
+  const country = dest?.country ?? pickCountry;
+  const regionSets = useMemo(() => (b.dest ? win.data.ad_sets.filter((s) => s.destination_id === b.dest) : []), [win.data, b.dest]);
+  const countrySets = useMemo(() => (country ? win.data.ad_sets.filter((s) => (s.country ?? "").toLowerCase() === country.toLowerCase()) : []), [win.data, country]);
+  const scope: "region" | "country" | "account" | "none" = everything ? "account" : regionSets.length ? "region" : countrySets.length ? "country" : country ? "none" : "account";
+  const sets = scope === "region" ? regionSets : scope === "country" ? countrySets : scope === "account" ? win.data.ad_sets : [];
+  const forDest = scope === "region" || scope === "country";
+  const ads = useMemo(() => {
+    const ids = new Set(sets.map((x) => x.id));
+    return scope === "account" ? win.data.ads : win.data.ads.filter((a) => ids.has(a.ad_set_id));
+  }, [win.data, sets, scope]);
+  // The figures behind the suggestion, last 30 days.
+  const cRow = (countryCost.data?.rows ?? []).find((r) => r.country.toLowerCase() === country.toLowerCase());
+  const dRow = dest ? (destCost.data?.rows ?? []).find((r) => r.destination === dest.name) : undefined;
+  const goal = { target: Number(dash.data?.target ?? 50), limit: Number(dash.data?.limit ?? 80) };
+  const perPax = (spend: number, pax: number) => (pax > 0 ? spend / pax : null);
+  const paxTone = (v: number | null) => (v == null ? "text-muted" : v <= goal.target ? "text-[#17663F]" : v <= goal.limit ? "text-[#8A5300]" : "text-[#A3231B]");
   const existing = b.where === "existing";
   const target = camps.data.find((c) => c.id === b.campaign_id);
   const objective = existing ? target?.objective || "OUTCOME_LEADS" : b.c.objective;
@@ -79,6 +97,7 @@ export default function CampaignBuild() {
     const short = d ? (d.name.toLowerCase() === d.country.toLowerCase() ? d.country : d.name.replace(new RegExp(`^${d.country}\\s*[-–:]\\s*`, "i"), "")) : "";
     setB((x) => ({ ...x, dest: id, campaign_id: "", c: { ...x.c, name: short && (!x.c.name || / - /.test(x.c.name)) ? `${short} ${dm()} - ${who}` : x.c.name } }));
     setEverything(false);
+    if (d) setPickCountry(d.country);
   }
   function setObjective(v: string) {
     const g = GOALS[v] ?? [];
@@ -242,7 +261,7 @@ export default function CampaignBuild() {
       <Step n={1} title="What to sell, and what to copy" summary={sum1} open={open === 1} done={Boolean(b.dest || b.s.from)} onToggle={() => setOpen(open === 1 ? 0 : 1)}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Fld label="Destination" hint="Tags the campaign, so its cost per pax is counted against the right deposits.">
-            <DestPicker dests={dests} value={b.dest} email={email} onChange={pickDest} onCreated={setDests} />
+            <DestPicker dests={dests} value={b.dest} email={email} onChange={pickDest} onCreated={setDests} onCountry={(c) => { setPickCountry(c); setEverything(false); }} />
             {seats && b.dest && (
               <div className={`rounded-lg px-3 py-2 text-[13px] ${seats.departures === 0 ? "bg-[#FBEFD5]" : "bg-ground"}`}>
                 {seats.departures === 0 ? "No coming departure for this destination in TravelCRM. Check there is something to sell before spending." : <>TravelCRM: <B>{seats.seats}</B> seats left across {seats.departures} coming departure{seats.departures === 1 ? "" : "s"}{seats.next ? `, next on ${seats.next}` : ""}.</>}
@@ -263,50 +282,99 @@ export default function CampaignBuild() {
         </div>
 
         <Part>Copy what already works</Part>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
-          <span>Best ad sets {forDest ? <>for <B>{dest?.name}</B></> : "in the whole account"}, last 30 days, cheapest leads first.</span>
-          {b.dest && (
-            <button type="button" onClick={() => setEverything(!everything)} className="border-0 bg-transparent p-0 text-[13px] font-semibold text-brand underline">
-              {everything ? `Only ${place}` : "Show the whole account"}
-            </button>
-          )}
-        </div>
-        {win.loading ? (
+        {!country && !everything ? (
+          <div className="rounded-lg bg-ground px-3 py-3 text-sm">
+            Choose a country above, and the best ad set there is suggested here, with its figures.{" "}
+            <button type="button" onClick={() => setEverything(true)} className="border-0 bg-transparent p-0 text-sm font-semibold text-brand underline">Or see the best in the whole account</button>
+          </div>
+        ) : win.loading ? (
           <div className="text-sm text-muted">Loading…</div>
-        ) : sets.length === 0 ? (
-          <div className="rounded-lg bg-ground px-3 py-3 text-sm">{forDest ? "This destination has no ad set with leads in the last 30 days. Show the whole account to copy from another destination, or use MTB's standard settings." : "No ad set with leads in the last 30 days."}</div>
         ) : (
           <>
-            {bestSet && (
-              <div className="flex flex-col gap-2 rounded-lg border-2 border-brand bg-[#E6F1EE] px-3 py-3">
-                <div className="text-sm">
-                  <B>Quickest way.</B> Copy the best ad set <B>{bestSet.ad_set}</B> ({cpl(bestSet.spend, bestSet.leads)} a lead, {bestSet.leads} leads) with its {bestAds.length === 1 ? "best ad" : `${bestAds.length} best ads`}
-                  {bestAds.length ? `: ${bestAds.map((a) => a.ad).join(", ")}` : ""}.
-                </div>
-                <div>
-                  <Btn disabled={Boolean(busy)} onClick={() => void copySet(bestSet, 2)}>Use the best</Btn>
-                </div>
+            {country && !everything && (
+              <div className="flex flex-col gap-1.5 rounded-lg bg-ground px-3 py-2.5 text-[13px]">
+                <div className="font-bold">{country}{dest && place !== dest.country ? <> › {place}</> : null}, last 30 days</div>
+                {[
+                  { label: country, row: cRow ? { spend: cRow.spend, leads: cRow.leads, pax: cRow.pax } : null, sets: countrySets.length },
+                  ...(dest && place !== dest.country ? [{ label: place, row: dRow ? { spend: dRow.spend, leads: dRow.leads, pax: dRow.pax } : null, sets: regionSets.length }] : []),
+                ].map((x) => {
+                  const pp = x.row ? perPax(x.row.spend, x.row.pax) : null;
+                  return (
+                    <div key={x.label} className="flex flex-wrap gap-x-3 gap-y-0.5">
+                      <span className="min-w-[90px] font-semibold">{x.label}</span>
+                      {x.row && x.row.spend > 0 ? (
+                        <>
+                          <span>{rm(x.row.spend)} spent</span>
+                          <span>{x.row.leads} leads{x.row.leads ? ` · ${cpl(x.row.spend, x.row.leads)} each` : ""}</span>
+                          <span>{x.row.pax} deposit pax{pp != null ? <> · <b className={paxTone(pp)}>RM{Math.round(pp)} a pax</b></> : ""}</span>
+                          <span className="text-muted">{x.sets} ad set{x.sets === 1 ? "" : "s"} with leads</span>
+                        </>
+                      ) : (
+                        <span className="text-muted">No ad spend in 30 days.</span>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="text-[11px] text-muted">Cost per pax against the target RM{goal.target} and limit RM{goal.limit}. Deposits are matched by destination, not by ad set.</div>
               </div>
             )}
-            <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-lg border border-line p-0">
-              {sets.slice(0, 6).map((s, i) => (
-                <li key={s.id} className="flex items-center gap-2 px-3 py-2.5">
-                  <span className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-full bg-ground text-xs font-bold">{i + 1}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-x-2 text-sm font-bold">
-                      {s.ad_set} {s.proven && <Pill tone="g">Proven</Pill>} {b.s.from?.id === s.id && <Pill tone="a">Copied</Pill>}
-                    </span>
-                    <span className="block break-words text-[12px] text-muted">
-                      {s.campaign} · <B>{cpl(s.spend, s.leads)}</B> a lead · {s.leads} leads · {rm(s.spend)}{s.daily_budget ? ` · RM${s.daily_budget} a day` : ""}
-                    </span>
-                  </span>
-                  <Btn small kind="s" disabled={Boolean(busy)} onClick={() => void copySet(s, 0)}>Copy settings</Btn>
-                </li>
-              ))}
-            </ul>
+
+            {scope === "none" ? (
+              <div className="flex flex-col gap-2 rounded-lg border-2 border-[#E8C98A] bg-[#FDF6E7] px-3 py-3 text-sm">
+                <div>
+                  <B>Nothing to copy for {dest && place !== dest.country ? `${place} or ` : ""}{country}.</B> No ad set there brought a lead in the last 30 days, so there is no proven setting to suggest.
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Btn small disabled={Boolean(busy)} onClick={standard}>Start from MTB's standard settings</Btn>
+                  <Btn small kind="s" onClick={() => setEverything(true)}>Copy from another country</Btn>
+                </div>
+              </div>
+            ) : (
+              <>
+                {dest && scope === "country" && place !== dest.country && (
+                  <div className="rounded-lg bg-[#FDF6E7] px-3 py-2 text-[13px]">
+                    <B>Nothing for {place} yet:</B> no ad set there brought a lead in the last 30 days. The best in {country} is suggested instead.
+                  </div>
+                )}
+                {bestSet && (
+                  <div className="flex flex-col gap-2 rounded-lg border-2 border-brand bg-[#E6F1EE] px-3 py-3">
+                    <div className="text-sm">
+                      <B>Quickest way{scope === "account" ? " (whole account)" : scope === "region" ? ` for ${place}` : ` for ${country}`}.</B> Copy <B>{bestSet.ad_set}</B> from {bestSet.campaign}: {cpl(bestSet.spend, bestSet.leads)} a lead, {bestSet.leads} leads, {rm(bestSet.spend)}
+                      {bestAds.length ? <>, with its {bestAds.length === 1 ? "best ad" : `${bestAds.length} best ads`}: {bestAds.map((a) => a.ad).join(", ")}</> : ""}.
+                    </div>
+                    {!bestSet.proven && <div className="text-[12px] text-[#8A5300]">Only {bestSet.leads} leads, so this is not proven yet: its cost could be luck.</div>}
+                    {sets.length > 1 && <div className="text-[12px] text-muted">Next best: {sets[1].ad_set}, {cpl(sets[1].spend, sets[1].leads)} a lead ({sets[1].leads} leads).</div>}
+                    <div>
+                      <Btn disabled={Boolean(busy)} onClick={() => void copySet(bestSet, 2)}>Use the best</Btn>
+                    </div>
+                  </div>
+                )}
+                <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-lg border border-line p-0">
+                  {sets.slice(0, 6).map((s, i) => (
+                    <li key={s.id} className="flex items-center gap-2 px-3 py-2.5">
+                      <span className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-full bg-ground text-xs font-bold">{i + 1}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-x-2 text-sm font-bold">
+                          {s.ad_set} {s.proven && <Pill tone="g">Proven</Pill>} {b.s.from?.id === s.id && <Pill tone="a">Copied</Pill>}
+                        </span>
+                        <span className="block break-words text-[12px] text-muted">
+                          {s.campaign}{scope !== "region" && s.destination ? ` (${s.destination})` : ""} · <B>{cpl(s.spend, s.leads)}</B> a lead · {s.leads} leads · {rm(s.spend)}{s.daily_budget ? ` · RM${s.daily_budget} a day` : ""}
+                        </span>
+                      </span>
+                      <Btn small kind="s" disabled={Boolean(busy)} onClick={() => void copySet(s, 0)}>Copy settings</Btn>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {(country || everything) && (
+              <button type="button" onClick={() => setEverything(!everything)} className="self-start border-0 bg-transparent p-0 text-[13px] font-semibold text-brand underline">
+                {everything ? (country ? `Back to ${dest && place !== dest.country ? place : country}` : "Hide the whole account") : "Show the best in the whole account"}
+              </button>
+            )}
           </>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={`${scope === "none" && !everything ? "hidden" : "flex"} flex-wrap items-center gap-2`}>
           <Btn kind="s" disabled={Boolean(busy)} onClick={standard}>Start from MTB's standard settings</Btn>
           <span className="text-xs text-muted">Leads on the website, Malaysia, 22+, Advantage+ audience and placements, RM{USUAL_BUDGET} a day.</span>
         </div>

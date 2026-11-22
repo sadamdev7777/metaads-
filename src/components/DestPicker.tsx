@@ -11,7 +11,7 @@ const regionOf = (d: Destination) => (d.name.toLowerCase() === d.country.toLower
  * Pick a destination in two steps: the country, then the region inside it. A country or a region that is
  * not on the list yet can be created on the spot; it is added to Settings, Destinations.
  */
-export function DestPicker({ dests, value, email, onChange, onCreated }: { dests: Destination[]; value: string; email: string; onChange: (id: string) => void; onCreated: (list: Destination[]) => void }) {
+export function DestPicker({ dests, value, email, onChange, onCreated, onCountry }: { dests: Destination[]; value: string; email: string; onChange: (id: string) => void; onCreated: (list: Destination[]) => void; onCountry?: (country: string) => void }) {
   const current = dests.find((d) => d.id === value);
   const [country, setCountry] = useState(current?.country ?? "");
   const [newCountry, setNewCountry] = useState("");
@@ -66,6 +66,7 @@ export function DestPicker({ dests, value, email, onChange, onCreated }: { dests
           setCountry(e.target.value);
           setAdding(e.target.value === NEW);
           onChange("");
+          onCountry?.(e.target.value === NEW ? "" : e.target.value);
         }}
         className={INPUT}
       >
