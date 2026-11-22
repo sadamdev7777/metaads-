@@ -15,7 +15,7 @@ const cors = {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const GRAPH = "https://graph.facebook.com/v27.0";
 type Row = Record<string, unknown>;
-type Rule = { id: string; name: string; enabled: boolean; kind: string; days: number[]; time_from: string | null; time_to: string | null; starts_at: string | null; ends_at: string | null; action: string; percent: number | null; scope: string; scope_values: string[]; skip_until: string | null };
+type Rule = { id: string; name: string; enabled: boolean; kind: string; days: number[]; time_from: string | null; time_to: string | null; end_offset?: number | null; starts_at: string | null; ends_at: string | null; action: string; percent: number | null; scope: string; scope_values: string[]; skip_until: string | null };
 const ME = "Alila";
 const MAX_CALLS = 150; // Meta requests in one run. The rest waits for the next run, 15 minutes later.
 const MIN_BUDGET = 5; // RM a day. She never lowers a budget below this.
@@ -36,16 +36,23 @@ function windowEnd(r: Rule, local: Date): Date | null {
     const b = new Date(`${r.ends_at.slice(0, 19)}Z`);
     return local >= a && local < b ? b : null;
   }
-  const from = minutes(r.time_from) ?? 0;
-  const to = minutes(r.time_to);
-  const now = local.getUTCHours() * 60 + local.getUTCMinutes();
-  const today = isoDay(local);
-  const yesterday = today === 1 ? 7 : today - 1;
+  // A window starts on each ticked day at time_from and ends end_offset days later at time_to.
+  // No times means the whole day. With no extra days, an end at or before the start means the next morning.
   const days = r.days ?? [];
-  if (to === null || (r.time_from === null && r.time_to === null)) return days.includes(today) && now >= from ? atMinute(local, 24 * 60) : null;
-  if (to > from) return days.includes(today) && now >= from && now < to ? atMinute(local, to) : null;
-  if (days.includes(today) && now >= from) return atMinute(local, 24 * 60 + to); // runs past midnight
-  if (days.includes(yesterday) && now < to) return atMinute(local, to);
+  const whole = r.time_from === null && r.time_to === null;
+  const from = whole ? 0 : minutes(r.time_from) ?? 0;
+  const extra = Math.max(0, Math.min(6, Number(r.end_offset ?? 0)));
+  let to = whole ? 24 * 60 : minutes(r.time_to) ?? 24 * 60;
+  if (extra === 0 && to <= from) to += 24 * 60;
+  to += extra * 24 * 60;
+  const today = atMinute(local, 0);
+  for (let back = 0; back <= 7; back++) {
+    const day = new Date(today.getTime() - back * 24 * HOUR);
+    if (!days.includes(isoDay(day))) continue;
+    const start = atMinute(day, from);
+    const end = atMinute(day, to);
+    if (local >= start && local < end) return end;
+  }
   return null;
 }
 
@@ -98,7 +105,7 @@ Deno.serve(async (req: Request) => {
     if (!model) return json({ ok: false, error: "No model chosen. Open Settings, Integrations." });
     const [stats, rules, notebook, dismissed] = await Promise.all([
       admin.rpc("ad_schedule_stats"),
-      admin.from("ad_schedule_rules").select("name, enabled, kind, days, time_from, time_to, starts_at, ends_at, action, percent, scope"),
+      admin.from("ad_schedule_rules").select("name, enabled, kind, days, time_from, time_to, end_offset, starts_at, ends_at, action, percent, scope"),
       admin.from("ai_learnings").select("lesson").eq("agent", "schedule").eq("is_active", true).order("id", { ascending: false }).limit(20),
       admin.from("ad_schedule_suggestions").select("title, rule, decision_note, decided_at").eq("status", "dismissed").order("id", { ascending: false }).limit(15),
     ]);
@@ -120,7 +127,7 @@ Deno.serve(async (req: Request) => {
                   name: { type: "string" }, kind: { type: "string", enum: ["weekly", "dates"] }, days: { type: "array", items: { type: "integer", minimum: 1, maximum: 7 } },
                   time_from: { type: "string", description: "HH:MM, or empty for the whole day" }, time_to: { type: "string", description: "HH:MM, or empty for the whole day" },
                   starts_at: { type: "string", description: "YYYY-MM-DDTHH:MM, dates rules only" }, ends_at: { type: "string" },
-                  action: { type: "string", enum: ["pause", "budget"] }, percent: { type: "integer", minimum: 10, maximum: 90, description: "For budget: lower by this percent." } } } } } },
+                  end_offset: { type: "integer", minimum: 0, maximum: 6, description: "Weekly rules: how many days after the start day the window ends. 0 = same day (or the next morning if the end time is earlier than the start)." }, action: { type: "string", enum: ["pause", "budget"] }, percent: { type: "integer", minimum: 10, maximum: 90, description: "For budget: lower by this percent." } } } } } },
               lessons: { type: "array", maxItems: 3, items: { type: "string" } },
             },
           },
@@ -141,7 +148,7 @@ Deno.serve(async (req: Request) => {
       if (kind === "weekly" && days.length === 0) return null;
       const dt = (v: unknown) => (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(v ?? "")) ? String(v).slice(0, 16) : null);
       if (kind === "dates" && (!dt(r.starts_at) || !dt(r.ends_at))) return null;
-      return { name: String(r.name ?? "Suggested rule").slice(0, 80), kind, days, time_from: hm(r.time_from), time_to: hm(r.time_to), starts_at: dt(r.starts_at), ends_at: dt(r.ends_at), action, percent: action === "budget" ? Math.min(90, Math.max(10, Number(r.percent) || 50)) : null, scope: "all", scope_values: [] };
+      return { name: String(r.name ?? "Suggested rule").slice(0, 80), kind, days, time_from: hm(r.time_from), time_to: hm(r.time_to), starts_at: dt(r.starts_at), ends_at: dt(r.ends_at), action, percent: action === "budget" ? Math.min(90, Math.max(10, Number(r.percent) || 50)) : null, end_offset: kind === "weekly" ? Math.max(0, Math.min(6, Number(r.end_offset) || 0)) : 0, scope: "all", scope_values: [] };
     };
     const good = (input.suggestions ?? []).map((s) => ({ title: String(s.title ?? "").slice(0, 160), why: String(s.why ?? "").slice(0, 900), numbers: String(s.numbers ?? "").slice(0, 900), rule: clean((s.rule ?? {}) as Row) })).filter((s) => s.title && s.rule);
     await admin.from("ad_schedule_suggestions").update({ status: "replaced" }).eq("status", "pending");
@@ -271,6 +278,12 @@ Deno.serve(async (req: Request) => {
     // It stays only while its own rule is in force, still says the same thing, still covers the campaign, and no stronger rule has taken over.
     const covered = on && sameMode && rule !== undefined && stillActive.has(rule.id) && rule.action === ch.kind && camp !== undefined && inScope(rule, camp) && !(wanted && wanted.rule.id !== rule.id);
     if (covered) continue;
+    // Another rule in force that would make the same change (for example one that starts where this one ends): hand it over, so nothing is turned on and off again.
+    const next = on && sameMode && camp ? active.find((r) => r.id !== ch.rule_id && r.action === ch.kind && inScope(r, camp) && (ch.kind === "pause" || (r.percent ?? 50) === (rule?.percent ?? -1)) && !(wanted && wanted.rule.id !== r.id)) ?? null : null;
+    if (next && next.id !== ch.rule_id) {
+      await admin.from("ad_schedule_changes").update({ rule_id: next.id, rule_name: next.name }).eq("id", ch.id);
+      continue;
+    }
     const why = !on ? "The schedule was switched off." : !sameMode ? "The mode was changed." : !rule ? "The rule was removed or switched off." : rule.skip_until && new Date(rule.skip_until) > nowUtc ? "Cancelled by a person." : !stillActive.has(rule.id) ? "The rule's time ended." : "The rule was changed.";
     await restore(ch, why);
   }

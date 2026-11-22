@@ -1,0 +1,1 @@
+-- Applied through the Supabase connector: ad_schedule_rules.end_offset (0-6), so a weekly rule can end on a later day.

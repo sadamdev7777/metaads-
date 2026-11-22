@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 
 export type SchedRule = {
-  id: string; name: string; enabled: boolean; kind: "weekly" | "dates"; days: number[]; time_from: string | null; time_to: string | null;
+  id: string; name: string; enabled: boolean; kind: "weekly" | "dates"; days: number[]; time_from: string | null; time_to: string | null; end_offset: number;
   starts_at: string | null; ends_at: string | null; action: "pause" | "budget"; percent: number | null;
   scope: "all" | "country" | "destination" | "campaigns"; scope_values: string[]; skip_until: string | null; created_by_email: string | null;
 };
@@ -12,14 +12,22 @@ export type SchedChange = { id: number; rule_id: string | null; rule_name: strin
 export type SchedSuggestion = { id: number; created_at: string; title: string; why: string | null; numbers: string | null; rule: Partial<RuleDraft>; status: string };
 
 export const DAYS = [{ v: 1, t: "Mon" }, { v: 2, t: "Tue" }, { v: 3, t: "Wed" }, { v: 4, t: "Thu" }, { v: 5, t: "Fri" }, { v: 6, t: "Sat" }, { v: 7, t: "Sun" }];
-export const blankRule = (): RuleDraft => ({ name: "", enabled: true, kind: "weekly", days: [7], time_from: null, time_to: null, starts_at: null, ends_at: null, action: "budget", percent: 50, scope: "all", scope_values: [] });
+export const blankRule = (): RuleDraft => ({ name: "", enabled: true, kind: "weekly", days: [7], time_from: null, time_to: null, end_offset: 0, starts_at: null, ends_at: null, action: "budget", percent: 50, scope: "all", scope_values: [] });
 
 const hm = (t: string | null) => (t ? t.slice(0, 5) : "");
 const nice = (s: string | null) => (s ? new Date(`${s.slice(0, 16)}:00+08:00`).toLocaleString("en-MY", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kuala_Lumpur" }) : "?");
 /** When a rule applies, in words. */
-export function whenText(r: Pick<SchedRule, "kind" | "days" | "time_from" | "time_to" | "starts_at" | "ends_at">): string {
+export function whenText(r: Pick<SchedRule, "kind" | "days" | "time_from" | "time_to" | "starts_at" | "ends_at"> & { end_offset?: number | null }): string {
   if (r.kind === "dates") return `${nice(r.starts_at)} to ${nice(r.ends_at)}`;
-  const days = r.days.length === 7 ? "Every day" : DAYS.filter((d) => r.days.includes(d.v)).map((d) => d.t).join(", ") || "No day chosen";
+  const extra = Number(r.end_offset ?? 0);
+  const names = DAYS.filter((d) => r.days.includes(d.v));
+  const days = r.days.length === 7 ? "Every day" : names.map((d) => d.t).join(", ") || "No day chosen";
+  const later = (v: number, n: number) => DAYS[(v - 1 + n) % 7].t;
+  if (extra > 0 && names.length === 1) {
+    const start = names[0];
+    return `${start.t} ${hm(r.time_from) || "00:00"} to ${later(start.v, extra)} ${hm(r.time_to) || "midnight"}`;
+  }
+  if (extra > 0) return `${days}, ${hm(r.time_from) || "00:00"} to ${extra === 1 ? "the next day" : `${extra} days later`} at ${hm(r.time_to) || "midnight"}`;
   if (!r.time_from && !r.time_to) return `${days}, all day`;
   const past = r.time_from && r.time_to && r.time_to <= r.time_from ? " the next day" : "";
   return `${days}, ${hm(r.time_from) || "00:00"} to ${hm(r.time_to) || "midnight"}${past}`;
@@ -32,16 +40,20 @@ export function inForce(r: SchedRule, now = new Date()): boolean {
   const local = new Date(now.getTime() + 8 * 3600_000);
   if (r.kind === "dates") return Boolean(r.starts_at && r.ends_at && local >= new Date(`${r.starts_at.slice(0, 19)}Z`) && local < new Date(`${r.ends_at.slice(0, 19)}Z`));
   const m = (t: string | null) => (t ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) : null);
-  const from = m(r.time_from) ?? 0;
-  const to = m(r.time_to);
-  const cur = local.getUTCHours() * 60 + local.getUTCMinutes();
-  const today = local.getUTCDay() || 7;
-  const yesterday = today === 1 ? 7 : today - 1;
-  if (to === null) return r.days.includes(today) && cur >= from;
-  if (to > from) return r.days.includes(today) && cur >= from && cur < to;
-  return (r.days.includes(today) && cur >= from) || (r.days.includes(yesterday) && cur < to);
+  const whole = !r.time_from && !r.time_to;
+  const from = whole ? 0 : m(r.time_from) ?? 0;
+  const extra = Math.max(0, Math.min(6, Number(r.end_offset ?? 0)));
+  let to = whole ? 1440 : m(r.time_to) ?? 1440;
+  if (extra === 0 && to <= from) to += 1440;
+  to += extra * 1440;
+  const day0 = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
+  for (let back = 0; back <= 7; back++) {
+    const day = day0 - back * 86_400_000;
+    if (!r.days.includes(new Date(day).getUTCDay() || 7)) continue;
+    if (local.getTime() >= day + from * 60_000 && local.getTime() < day + to * 60_000) return true;
+  }
+  return false;
 }
-
 export async function fetchSchedule(): Promise<{ settings: SchedSettings | null; rules: SchedRule[]; open: SchedChange[]; recent: SchedChange[]; suggestions: SchedSuggestion[] }> {
   if (!supabase) return { settings: null, rules: [], open: [], recent: [], suggestions: [] };
   const [s, r, o, c, g] = await Promise.all([
@@ -62,7 +74,7 @@ export async function saveRule(d: RuleDraft, email: string): Promise<string | nu
   if (!supabase) return "Supabase is not connected in this build.";
   const weekly = d.kind === "weekly";
   const row = {
-    name: d.name.trim(), enabled: d.enabled, kind: d.kind, days: weekly ? [...d.days].sort() : [], time_from: weekly ? d.time_from || null : null, time_to: weekly ? d.time_to || null : null,
+    name: d.name.trim(), enabled: d.enabled, kind: d.kind, days: weekly ? [...d.days].sort() : [], time_from: weekly ? d.time_from || null : null, time_to: weekly ? d.time_to || null : null, end_offset: weekly ? d.end_offset ?? 0 : 0,
     starts_at: weekly ? null : d.starts_at, ends_at: weekly ? null : d.ends_at, action: d.action, percent: d.action === "budget" ? d.percent ?? 50 : null,
     scope: d.scope, scope_values: d.scope === "all" ? [] : d.scope_values, skip_until: null, updated_at: new Date().toISOString(),
   };

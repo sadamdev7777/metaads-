@@ -205,7 +205,7 @@ export default function AdSchedule() {
             <div className="text-[15px] font-bold">{g.title}</div>
             {g.why && <div>{g.why}</div>}
             {g.numbers && <div className="text-[13px] text-muted">{g.numbers}</div>}
-            <div className="rounded-lg bg-[#E3ECF9] px-3 py-2 text-[13px]"><B>The rule:</B> {whenText({ kind: "weekly", days: [], time_from: null, time_to: null, starts_at: null, ends_at: null, ...g.rule } as SchedRule)} · {doesText({ action: "budget", percent: 50, ...g.rule } as SchedRule)} · all running campaigns</div>
+            <div className="rounded-lg bg-[#E3ECF9] px-3 py-2 text-[13px]"><B>The rule:</B> {whenText({ kind: "weekly", days: [], time_from: null, time_to: null, end_offset: 0, starts_at: null, ends_at: null, ...g.rule } as SchedRule)} · {doesText({ action: "budget", percent: 50, ...g.rule } as SchedRule)} · all running campaigns</div>
             {dropping === g.id ? (
               <div className="flex flex-col gap-2">
                 <Fld label="Why not? She reads this next week." htmlFor={`dr-${g.id}`}>
@@ -245,7 +245,7 @@ export default function AdSchedule() {
                 </span>
                 <span className="flex flex-wrap gap-1.5">
                   <Btn small kind="s" onClick={async () => { await toggleRule(r.id, !r.enabled); if (r.enabled) await schedule({ action: "tick" }); act(`${r.enabled ? "Switched off" : "Switched on"} the schedule rule “${r.name}”`, "Ad schedule", r.enabled ? "Rule off. What it changed has been put back." : "Rule on."); await load(); }}>{r.enabled ? "Switch off" : "Switch on"}</Btn>
-                  <Btn small kind="s" onClick={() => { setDraft({ ...r, time_from: r.time_from?.slice(0, 5) ?? null, time_to: r.time_to?.slice(0, 5) ?? null, starts_at: r.starts_at?.slice(0, 16) ?? null, ends_at: r.ends_at?.slice(0, 16) ?? null }); setErr(""); }}>Edit</Btn>
+                  <Btn small kind="s" onClick={() => { setDraft({ ...r, end_offset: r.end_offset ?? 0, time_from: r.time_from?.slice(0, 5) ?? null, time_to: r.time_to?.slice(0, 5) ?? null, starts_at: r.starts_at?.slice(0, 16) ?? null, ends_at: r.ends_at?.slice(0, 16) ?? null }); setErr(""); }}>Edit</Btn>
                   <Btn small kind="s" onClick={async () => { if (d.open.some((c) => c.rule_id === r.id && !c.dry_run)) return setErr("This rule has changes in force. Switch it off first, wait for Alila to put them back, then remove it."); await removeRule(r.id); act(`Removed the schedule rule “${r.name}”`, "Ad schedule", "Rule removed."); await load(); }}>Remove</Btn>
                 </span>
               </li>
@@ -275,7 +275,18 @@ export default function AdSchedule() {
                     <input id="r-tt" type="time" value={draft.time_to ?? ""} onChange={(e) => setDraft({ ...draft, time_to: e.target.value || null })} className={INPUT} />
                   </Fld>
                 </div>
-                <div className="text-xs text-muted">Malaysia time. Leave both empty for the whole day. An end earlier than the start runs past midnight, for example 23:00 to 07:00.</div>
+                <Fld label="Ends" htmlFor="r-off" hint={draft.days.length > 1 && (draft.end_offset ?? 0) > 0 ? "Counted from each ticked day." : undefined}>
+                  <select id="r-off" value={draft.end_offset ?? 0} onChange={(e) => setDraft({ ...draft, end_offset: Number(e.target.value) })} className={`${INPUT} sm:max-w-[420px]`}>
+                    <option value={0}>The same day (or the next morning, if “To” is earlier than “From”)</option>
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                      <option key={n} value={n}>
+                        {draft.days.length === 1 ? `${DAYS[(draft.days[0] - 1 + n) % 7].t}, ${n === 1 ? "the next day" : `${n} days later`}` : n === 1 ? "The next day" : `${n} days later`}
+                      </option>
+                    ))}
+                  </select>
+                </Fld>
+                <div className="rounded-lg bg-[#E3ECF9] px-3 py-2 text-[13px]"><B>This rule:</B> {whenText(draft)}</div>
+                <div className="text-xs text-muted">Malaysia time. Leave both times empty for whole days. Example: Sat ticked, From 11:00, To 11:59, Ends “Sun, the next day” means Saturday 11:00 to Sunday 11:59.</div>
               </>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
