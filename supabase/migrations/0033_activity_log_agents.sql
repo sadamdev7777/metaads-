@@ -1,0 +1,1 @@
+-- Applied through the Supabase connector: activity_log.user_id and user_email may be empty, so entries written by AI staff (Alila) are kept.
