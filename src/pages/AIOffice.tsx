@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { Avatar, B, Btn, Card, PageHead, Pill, T } from "../components/ui";
 import { useAuth } from "../lib/auth";
 import { STAFF } from "../lib/data";
+import { type SchedSettings, fetchSchedule } from "../lib/schedule";
+import { ScheduleStrip } from "../components/AdSchedule";
 import { type Lesson, type Report, analyst, confTone, fetchLatestReport, fetchLessons, removeLesson, when, runAgent } from "../lib/live";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
@@ -19,6 +21,7 @@ export default function AIOffice() {
   const [aiNote, setAiNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<Report | null>(null);
+  const [sched, setSched] = useState<SchedSettings | null>(null);
   const [review, setReview] = useState<Report | null>(null);
   const [working, setWorking] = useState("");
   async function ask(fn: "budget-planner" | "creative-analyst", name: string, what: string) {
@@ -40,6 +43,7 @@ export default function AIOffice() {
       supabase.from("integration_status").select("status, secret_hint, detail").eq("key", "ai_model").maybeSingle(),
     ]);
     setRuns((r.data ?? []) as Run[]);
+    void fetchSchedule().then((x) => setSched(x.settings));
     void fetchLatestReport("budget").then(setPlan);
     void fetchLatestReport("creative").then(setReview);
     setReport(rep);
@@ -85,9 +89,10 @@ export default function AIOffice() {
 
       {aiNote && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]"><B>Luqman's last study did not finish.</B> {aiNote} Press Study the ads now to try again.</div>}
 
+      <ScheduleStrip />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {STAFF.map((s) => {
-          const on = s.who === "data" || s.who === "ads" || s.who === "plan" || aiOn;
+          const on = s.who === "sch" ? Boolean(sched?.enabled) : s.who === "data" || s.who === "ads" || s.who === "plan" || aiOn;
           return (
             <Card key={s.who}>
               <div className="flex items-center gap-3.5">
@@ -96,14 +101,16 @@ export default function AIOffice() {
                   <h2 className="m-0 text-lg font-bold">{s.name}</h2>
                   <div className="text-[13px] text-muted">{s.role}</div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
-                    <Pill tone={on ? "g" : "n"}>{s.who === "ads" || s.who === "plan" ? "On call" : on ? "Running" : "Not started"}</Pill>
+                    <Pill tone={s.who === "sch" && sched?.enabled && sched.dry_run ? "a" : on ? "g" : "n"}>{s.who === "sch" ? (!sched?.enabled ? "Off" : sched.dry_run ? "Show-only" : "On") : s.who === "ads" || s.who === "plan" ? "On call" : on ? "Running" : "Not started"}</Pill>
                     <Pill>{s.kind}</Pill>
                   </div>
                 </div>
               </div>
               <div className="text-[13px] text-muted">{s.job}</div>
               <div className="mt-auto rounded-lg bg-ground px-3 py-2.5 text-sm">
-                {s.who === "data" ? (
+                {s.who === "sch" ? (
+                  <>{sched?.last_tick_at ? `Last check ${when(sched.last_tick_at)}: ${sched.last_tick_note}` : "No check yet."} <Link to="/settings/ad-schedule">Set her rules</Link></>
+                ) : s.who === "data" ? (
                   <>Last sync {when(lastGood?.finished_at)}. Every hour, and in full at 01:37.</>
                 ) : s.who === "ana" && aiOn ? (
                   <>{report ? `Last study ${when(report.created_at)}.` : "Connected. No study yet."} Every night at 02:10.</>

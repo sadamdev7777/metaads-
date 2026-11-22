@@ -237,7 +237,7 @@ export function Bar({ pct, label }: { pct: number; label: string }) {
   );
 }
 
-export type AgentKey = "data" | "plan" | "ads" | "ana" | "cre" | "bud";
+export type AgentKey = "data" | "plan" | "ads" | "ana" | "cre" | "bud" | "sch";
 export type AgentState = "work" | "wait" | "idle";
 
 const AV: Record<AgentKey, [string, string]> = {
@@ -247,6 +247,7 @@ const AV: Record<AgentKey, [string, string]> = {
   ana: ["#E7E1F7", "#4B3591"],
   cre: ["#FBEFD5", "#8A5300"],
   bud: ["#DDEFE9", "#0F5C4D"],
+  sch: ["#E3ECF9", "#274C8A"],
 };
 
 export const AGENT_STATE: Record<AgentState, { dot: string; tone: Tone; label: string }> = {
@@ -263,6 +264,7 @@ const FACE: Record<AgentKey, { skin: string; cover: "hijab" | "hair"; coverColor
   plan: { skin: "#F0C4A0", cover: "hijab", coverColor: "#B4567A", shirt: "#7E3355" },
   cre: { skin: "#E3AE84", cover: "hijab", coverColor: "#C28A1B", shirt: "#7A5410" },
   bud: { skin: "#B9794F", cover: "hair", coverColor: "#4A4A4A", shirt: "#0F5C4D", glasses: true },
+  sch: { skin: "#EBC09A", cover: "hijab", coverColor: "#2F5FA8", shirt: "#1F3F73" },
 };
 
 /** Face of an AI staff member, with a status dot that pulses while working. */

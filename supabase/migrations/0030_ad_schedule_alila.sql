@@ -1,0 +1,5 @@
+-- Applied through the Supabase connector. Alila, the schedule keeper:
+-- tables ad_schedule_settings, ad_schedule_rules, ad_schedule_changes, ad_schedule_suggestions (RLS: signed-in users),
+-- functions ad_schedule_stats() and run_schedule(p_action), and two cron jobs:
+--   ad-schedule-tick          */15 * * * *   select public.run_schedule('tick')
+--   ad-schedule-study-weekly  30 20 * * 0    select public.run_schedule('study')   (Monday 04:30 Malaysia time)

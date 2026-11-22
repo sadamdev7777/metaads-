@@ -5,11 +5,13 @@ import { fetchActivity, type ActivityRow } from "../lib/activity";
 import { useAuth } from "../lib/auth";
 import { MODE_ROWS } from "../lib/data";
 import { type Destination, analyst, count, fetchDestinations, rematch, removeDestination, rm, saveDestination, setDepartureDestination, useCampaigns, useDestinationCost, useMonthTotals, useUnknownDepartures, when } from "../lib/live";
+import AdSchedule from "../components/AdSchedule";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 
 const TABS = [
   { key: "rules", label: "Rules", sub: "AI staff follow these as soon as they are saved." },
+  { key: "ad-schedule", label: "Ad schedule", sub: "Hours and dates when Alila pauses campaigns or lowers budgets, and puts them back." },
   { key: "destinations", label: "Destinations", sub: "Your own list. It decides which campaigns and TravelCRM packages count together." },
   { key: "budget", label: "Budget", sub: "Plan and track monthly spend by country." },
   { key: "integrations", label: "Integrations", sub: "Check that every connection the system depends on is working." },
@@ -39,6 +41,7 @@ export default function Settings() {
         ))}
       </nav>
       {tab === "rules" && <Rules />}
+      {tab === "ad-schedule" && <AdSchedule />}
       {tab === "destinations" && <Destinations />}
       {tab === "budget" && <Budget />}
       {tab === "integrations" && <Integrations />}

@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useEffect } from "react";
 import { type CampaignRow, type Destination, count, cpl, delivery, PERIODS, fetchDepartures, fetchDestinations, guessRunBy, period, rm, saveTag, syncNow, useCampaignsIn, useMonthTotals, when, spanText } from "../lib/live";
 import { useStore } from "../lib/store";
+import { ScheduleStrip } from "../components/AdSchedule";
 import { DestPicker } from "../components/DestPicker";
 
 const INPUT = "min-h-[44px] rounded-lg border border-[#9AA39E] bg-white px-3 text-[15px] text-ink";
@@ -133,6 +134,7 @@ export default function Campaigns() {
         }
       />
 
+      <ScheduleStrip />
       {error && <div className="rounded-xl bg-[#FBE6E3] px-5 py-4 text-sm text-[#A3231B]">Could not load campaigns: {error}</div>}
 
       {untagged.length > 0 && (
