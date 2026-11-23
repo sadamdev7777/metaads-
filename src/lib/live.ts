@@ -309,7 +309,7 @@ export async function mira(body: Record<string, unknown>): Promise<{ ok: boolean
 }
 
 /* ---------- Products: TravelCRM packages and departures that have been loaded ---------- */
-export type Departure = { departure_id: number; package_code: string | null; package_name: string | null; country: string | null; departure_date: string | null; seats_available: number | null; destination_id: string | null; updated_at: string };
+export type Departure = { departure_id: number; package_code: string | null; package_name: string | null; country: string | null; departure_date: string | null; return_date?: string | null; seats_available: number | null; availability?: string | null; price_from?: number | null; booking_deadline?: string | null; seats_checked_at?: string | null; destination_id: string | null; updated_at: string };
 export async function fetchDepartures(): Promise<{ departures: Departure[]; pax: Map<number, number> }> {
   if (!supabase) return { departures: [], pax: new Map() };
   const [d, b] = await Promise.all([
