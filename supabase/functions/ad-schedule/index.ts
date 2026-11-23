@@ -198,8 +198,19 @@ Deno.serve(async (req: Request) => {
     token ??= await secret("meta_access_token");
     if (!token) { stop = "Meta Ads is not connected."; throw new Error(stop); }
     calls++;
-    const res = await fetch(`${GRAPH}/${path}`, fields ? { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: new URLSearchParams(fields) } : { headers: { Authorization: `Bearer ${token}` } });
-    const out = (await res.json().catch(() => ({}))) as Row;
+    const call = async (f?: Record<string, string>) => {
+      const res = await fetch(`${GRAPH}/${path}`, f ? { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: new URLSearchParams(f) } : { headers: { Authorization: `Bearer ${token}` } });
+      return { res, out: (await res.json().catch(() => ({}))) as Row };
+    };
+    let { res, out } = await call(fields);
+    // An older ad set must now name its verified advertiser before Meta lets its budget change: copy it from a recent ad set and send again once.
+    if (fields && (!res.ok || out.error) && Number(((out.error ?? {}) as Row).error_subcode) === 3858634) {
+      const d = await declaration();
+      if (d) {
+        calls++;
+        ({ res, out } = await call({ ...fields, ...d }));
+      }
+    }
     if (!res.ok || out.error) {
       const e = (out.error ?? {}) as Row;
       const msg = String(e.error_user_msg ?? e.message ?? `Meta answered with status ${res.status}`);
@@ -207,6 +218,24 @@ Deno.serve(async (req: Request) => {
       throw new Error(msg);
     }
     return out;
+  };
+  let declared: Record<string, string> | null | undefined;
+  const declaration = async () => {
+    if (declared !== undefined) return declared;
+    declared = null;
+    const { data: st } = await admin.from("integration_status").select("config").eq("key", "meta_ads").maybeSingle();
+    const cfg = (st?.config ?? {}) as { selected?: string[]; ad_account_id?: string };
+    const account = String(cfg.selected?.[0] ?? cfg.ad_account_id ?? "").replace(/^act_/, "");
+    if (!account || !token) return declared;
+    const res = await fetch(`${GRAPH}/act_${account}/adsets?fields=regional_regulated_categories,regional_regulation_identities&limit=60`, { headers: { Authorization: `Bearer ${token}` } });
+    const out = (await res.json().catch(() => ({}))) as Row;
+    for (const x of ((out.data ?? []) as Row[])) {
+      if (x.regional_regulation_identities && Object.keys(x.regional_regulation_identities as Row).length) {
+        declared = { regional_regulated_categories: JSON.stringify(x.regional_regulated_categories ?? []), regional_regulation_identities: JSON.stringify(x.regional_regulation_identities) };
+        break;
+      }
+    }
+    return declared;
   };
   const log = (kind: string, level: string, entityId: unknown, metaId: unknown, name: string, before: Row, after: Row, ok: boolean, error?: string) =>
     admin.from("ads_actions").insert({ kind, level, entity_id: entityId ?? null, meta_id: metaId ?? null, entity_name: name, before, after, ok, error: error?.slice(0, 900) ?? null, by_email: ME });

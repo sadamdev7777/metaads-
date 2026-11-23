@@ -43,9 +43,37 @@ Deno.serve(async (req: Request) => {
     if (!res.ok || out.error) throw new Error(String(out?.error?.message ?? `Meta answered with status ${res.status}`));
     return { name: out.name ?? null, status: out.status ?? null, effective_status: out.effective_status ?? null, daily_budget: out.daily_budget == null ? null : Number(out.daily_budget) / 100 };
   };
-  const write = async (metaId: string, fields: Record<string, string>) => {
-    const res = await fetch(`${GRAPH}/${metaId}`, { method: "POST", headers: auth, body: new URLSearchParams(fields) });
+  // Meta now wants an ad set aimed at Malaysia to name its verified advertiser before its budget or status can change.
+  // Older ad sets do not have it, so it is copied from a recent ad set that does, and the change is sent again once.
+  let declared: Record<string, string> | null | undefined;
+  const declaration = async () => {
+    if (declared !== undefined) return declared;
+    declared = null;
+    const { data: st } = await admin.from("integration_status").select("config").eq("key", "meta_ads").maybeSingle();
+    const cfg = (st?.config ?? {}) as { selected?: string[]; ad_account_id?: string };
+    const account = String(cfg.selected?.[0] ?? cfg.ad_account_id ?? "").replace(/^act_/, "");
+    if (!account) return declared;
+    const res = await fetch(`${GRAPH}/act_${account}/adsets?fields=regional_regulated_categories,regional_regulation_identities&limit=60`, { headers: auth });
     const out = await res.json().catch(() => ({}));
+    for (const x of (out?.data ?? []) as Row[]) {
+      if (x.regional_regulation_identities && Object.keys(x.regional_regulation_identities as Row).length) {
+        declared = { regional_regulated_categories: JSON.stringify(x.regional_regulated_categories ?? []), regional_regulation_identities: JSON.stringify(x.regional_regulation_identities) };
+        break;
+      }
+    }
+    return declared;
+  };
+  const write = async (metaId: string, fields: Record<string, string>) => {
+    const send = async (f: Record<string, string>) => {
+      const res = await fetch(`${GRAPH}/${metaId}`, { method: "POST", headers: auth, body: new URLSearchParams(f) });
+      const out = await res.json().catch(() => ({}));
+      return { res, out };
+    };
+    let { res, out } = await send(fields);
+    if ((!res.ok || out.error) && Number(out?.error?.error_subcode) === 3858634) {
+      const d = await declaration();
+      if (d) ({ res, out } = await send({ ...fields, ...d }));
+    }
     if (!res.ok || out.error) {
       const msg = String(out?.error?.error_user_msg ?? out?.error?.message ?? `Meta answered with status ${res.status}`);
       throw new Error(/permission|not authorized|\(#10\)|\(#200\)/i.test(msg) ? `The Meta token is not allowed to change ads: ${msg}` : msg);
