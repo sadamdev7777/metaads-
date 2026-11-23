@@ -1,0 +1,4 @@
+-- Applied through Supabase: crm_bookings gets phone_sha256, email_sha256 (64-char hex only), paid_amount,
+-- capi_sent_at, capi_error. integration_status meta_capi config {enabled:false, pixel_id}.
+-- pg_cron capi-send-nightly at 01:40 Malaysia time calls the capi-send edge function, which sends
+-- paid deposits of the last 7 days as Purchase events (event_id mtb-booking-<id>) once enabled.
