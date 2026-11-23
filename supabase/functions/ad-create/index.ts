@@ -25,6 +25,8 @@ Deno.serve(async (req: Request) => {
   const email = who.user.email ?? "";
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const body = (await req.json().catch(() => ({}))) as Row;
+  const { data: me } = await admin.from("profiles").select("active").eq("id", who.user.id).maybeSingle();
+  if (!me?.active) return json({ ok: false, error: "Your access is turned off. Ask an admin." }, 403);
 
   const { data: tokenData } = await admin.rpc("get_integration_secret", { p_name: "meta_access_token" });
   const token = typeof tokenData === "string" && tokenData.length >= 20 ? tokenData : null;
@@ -186,12 +188,22 @@ Deno.serve(async (req: Request) => {
       }
       const creativeFields: Record<string, string> = { name: `${name} ${new Date().toISOString().slice(0, 10)}`, object_story_spec: JSON.stringify(story) };
       if (urlTags) creativeFields.url_tags = urlTags;
+      // Meta's own AI variations, as chosen in Run campaign. They are added on top of what was copied from the winning ad.
+      const ai = (body.meta_ai ?? null) as { images?: boolean; text?: boolean } | null;
+      let features = (tpl?.features ?? null) as Row | null;
+      if (ai) {
+        const spec = { ...(((features ?? {}) as Row).creative_features_spec as Row ?? {}) };
+        const set = (keys: string[], on: boolean) => keys.forEach((k) => (spec[k] = { enroll_status: on ? "OPT_IN" : "OPT_OUT" }));
+        set(["image_uncrop", "image_touchups", "image_brightness_and_contrast", "image_animation", "adapt_to_placement"], Boolean(ai.images));
+        set(["text_optimizations", "enhance_cta"], Boolean(ai.text));
+        features = { ...(features ?? {}), creative_features_spec: spec };
+      }
       let creative: Row;
       try {
-        creative = await post(`act_${account}/adcreatives`, tpl?.features ? { ...creativeFields, degrees_of_freedom_spec: JSON.stringify(tpl.features) } : creativeFields);
+        creative = await post(`act_${account}/adcreatives`, features ? { ...creativeFields, degrees_of_freedom_spec: JSON.stringify(features) } : creativeFields);
       } catch (e) {
-        if (!tpl?.features) throw e;
-        creative = await post(`act_${account}/adcreatives`, creativeFields); // the copied enhancement settings did not fit this format
+        if (!features) throw e;
+        creative = await post(`act_${account}/adcreatives`, creativeFields); // the enhancement settings did not fit this format
       }
       creativeId = String(creative.id ?? "");
       if (!creativeId) throw new Error("Meta did not return the new creative.");

@@ -7,7 +7,7 @@ import { AudienceForm } from "../components/build/AudienceForm";
 import { Fld, INPUT, Part, Seg, Step, money } from "../components/build/parts";
 import { useAuth } from "../lib/auth";
 import {
-  ATTRIBUTION, BIDS, type Build, EVENTS, GOALS, OBJECTIVES, type Options, type SourceAd, type SourceSet, type WinSet, type Winners,
+  ATTRIBUTION, BIDS, type Build, DEFAULT_AI, EVENTS, GOALS, OBJECTIVES, type Options, type SourceAd, type SourceSet, type WinSet, type Winners,
   PAGE_FIX, audienceFrom, audienceLine, blankBuild, builder, dm, loadSaved, problems, saveLocal, staffName, standardAudience,
 } from "../lib/build";
 import { type Destination, type MediaItem, adCreate, cpl, fetchDestinations, fetchMedia, rm, seatsFor, useCampaigns, useCountryCost, useDashTotals, useDestinationCost, useRpc } from "../lib/live";
@@ -150,7 +150,7 @@ export default function CampaignBuild() {
   }
 
   const adBody = (ad: Build["ads"][number], adSetId: string) => {
-    const base = { action: "create", ad_set_id: adSetId, name: ad.name.trim(), copied_from: ad.from?.ad ?? "" };
+    const base = { action: "create", ad_set_id: adSetId, name: ad.name.trim(), copied_from: ad.from?.ad ?? "", meta_ai: b.ai ?? DEFAULT_AI };
     if (ad.mode === "reuse") return { ...base, creative_id: ad.creative_id };
     const words = { message: ad.message, title: ad.title, description: ad.description, link: ad.link, cta: ad.cta, url_tags: ad.url_tags, page_id: opts?.identity?.page_id ?? "", instagram_user_id: opts?.identity?.instagram_user_id ?? "", template_ad_id: ad.from?.id ?? win.data.ads[0]?.id };
     return ad.mode === "same" ? { ...base, ...words, image_hash: ad.image_hash, video_id: ad.kind === "video" ? ad.video_id : "" } : { ...base, ...words, media_id: ad.media_id };
@@ -503,6 +503,18 @@ export default function CampaignBuild() {
       {/* ---------- 4. Ads ---------- */}
       <Step n={existing ? 3 : 4} title="Ads: media and words" summary={sum4} open={open === 4} done={b.ads.length > 0 && issues.every((i) => i.step !== 4)} onToggle={() => setOpen(open === 4 ? 0 : 4)}>
         <AdsForm ads={b.ads} set={(list) => setB((x) => ({ ...x, ads: list }))} winners={ads.length ? ads : win.data.ads} media={media} destId={b.dest} defaults={defaults} creativeOk={creativeOk} onNote={setNote} />
+        <div className="flex flex-col gap-2 rounded-lg border border-line bg-[#F7F8F6] px-3 py-3">
+          <div className="text-sm font-bold">Variations by Meta AI</div>
+          <p className="m-0 text-[13px] text-muted">Meta makes extra versions of each ad by itself and shows each person the one that works best. No new ads to manage, and nothing is published until a person turns the ad on.</p>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-0.5 h-5 w-5 flex-none" checked={(b.ai ?? DEFAULT_AI).images} onChange={(e) => setB((x) => ({ ...x, ai: { ...(x.ai ?? DEFAULT_AI), images: e.target.checked } }))} />
+            <span><B>Image variations</B>: expand the picture to fit each placement, touch up, adjust brightness, add slight motion. <span className="text-muted">Recommended.</span></span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-0.5 h-5 w-5 flex-none" checked={(b.ai ?? DEFAULT_AI).text} onChange={(e) => setB((x) => ({ ...x, ai: { ...(x.ai ?? DEFAULT_AI), text: e.target.checked } }))} />
+            <span><B>Text variations</B>: Meta may swap your headline and text around or reword the button. <span className="text-muted">Off by default, so prices and dates stay exactly as written.</span></span>
+          </label>
+        </div>
         <div><Btn onClick={() => setOpen(5)}>Next: check and create</Btn></div>
       </Step>
 

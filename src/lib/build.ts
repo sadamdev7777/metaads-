@@ -46,7 +46,10 @@ export type Build = {
     bid_strategy: string; bid_amount: string; attribution: string; audience: Audience; from?: { id: string; name: string; campaign: string };
   };
   ads: AdDraft[];
+  /** Meta's own AI variations of each ad. Images: expand, touch up, brightness, slight motion, fit each placement. Text: Meta may swap or reword. */
+  ai?: { images: boolean; text: boolean };
 };
+export const DEFAULT_AI = { images: true, text: false };
 
 export const OBJECTIVES = [
   { v: "OUTCOME_LEADS", t: "Leads", d: "People who enquire on the website. What MTB uses." },
@@ -112,6 +115,7 @@ export const blankBuild = (email: string): Build => ({
   c: { name: "", objective: "OUTCOME_LEADS", budget_level: "adset", daily_budget: "100", bid_strategy: "LOWEST_COST_WITHOUT_CAP", spend_cap: "" },
   s: { name: `Broad ${dm()} - ${staffName(email)}`, goal: "OFFSITE_CONVERSIONS", pixel_id: "", event: "COMPLETE_REGISTRATION", budget_type: "daily", budget: "100", start: "", end: "", bid_strategy: "LOWEST_COST_WITHOUT_CAP", bid_amount: "", attribution: "7c1v", audience: standardAudience() },
   ads: [],
+  ai: { ...DEFAULT_AI },
 });
 
 /* ---------- Winners: what to copy from ---------- */
