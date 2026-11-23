@@ -1,0 +1,4 @@
+-- Applied through Supabase: crm_departures gets return_date, availability, price_from, booking_deadline, seats_checked_at.
+-- check_crm_fresh() raises one alert a day when TravelCRM bookings (or seats) are older than 36 hours;
+-- pg_cron job crm-fresh-check runs it at 09:15 and 17:15 Malaysia time.
+-- Seats for every upcoming departure are loaded nightly at 02:17 by the scheduled task "MTB: tarik semua tarikh dan seat TravelCRM".
