@@ -1,0 +1,8 @@
+-- Applied through Supabase:
+-- notifications.dedupe_key; run_alerts() (sold-out products with ads, mismatched destinations, monthly pacing,
+-- running campaigns with RM150+ in 3 days and under 3 leads), pg_cron watch-alerts-hourly at :25.
+-- match_destination(): a "[Region]" tag in a campaign name matches a region destination exactly.
+-- profiles.can_approve_budget: who besides admins may raise a budget (enforced in ads-action).
+-- Destination keywords added: Korea - Winter (seoul/korea musim sejuk), Korea - Spring (korea/seoul musim bunga),
+-- Europe - Itali Swiss (italy & switzerland, switzerland), Europe - Eropah Barat (western europe, laluan ikonik eropah),
+-- Japan - Osaka Kyoto (osaka, kyoto / osaka nara / osaka kyoto).

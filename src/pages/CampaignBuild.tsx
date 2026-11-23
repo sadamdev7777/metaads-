@@ -94,7 +94,8 @@ export default function CampaignBuild() {
 
   function pickDest(id: string) {
     const d = dests.find((x) => x.id === id);
-    const short = d ? (d.name.toLowerCase() === d.country.toLowerCase() ? d.country : d.name.replace(new RegExp(`^${d.country}\\s*[-–:]\\s*`, "i"), "")) : "";
+    // A region is written as a tag, "[Korea Winter] 24/11 - Sadam", so the system matches it exactly.
+    const short = d ? (d.name.includes(" - ") ? `[${d.name.replace(/\s+-\s+/g, " ")}]` : d.country) : "";
     setB((x) => ({ ...x, dest: id, campaign_id: "", c: { ...x.c, name: short && (!x.c.name || / - /.test(x.c.name)) ? `${short} ${dm()} - ${who}` : x.c.name } }));
     setEverything(false);
     if (d) setPickCountry(d.country);
@@ -384,7 +385,7 @@ export default function CampaignBuild() {
       {/* ---------- 2. Campaign ---------- */}
       {!existing && (
         <Step n={2} title="Campaign" summary={sum2} open={open === 2} done={Boolean(b.c.name.trim())} onToggle={() => setOpen(open === 2 ? 0 : 2)}>
-          <Fld label="Campaign name" htmlFor="c-name" hint="Destination, date, your name: the destination is then matched by itself.">
+          <Fld label="Campaign name" htmlFor="c-name" hint="[Destination] date - your name, for example [Korea Winter] 24/11 - Haniss. The tag in brackets tells the system the destination.">
             <input id="c-name" value={b.c.name} onChange={(e) => upC({ name: e.target.value })} placeholder={`Yunnan ${dm()} - ${who}`} className={INPUT} />
           </Fld>
           <Fld label="Objective">

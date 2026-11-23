@@ -18,7 +18,7 @@ The goal is more paid-deposit pax for less money: target RM50 of ad spend per pa
 Each morning you decide how the daily ad money should be split between destinations, using:
 - cost per pax by destination (spend divided by pax) over the last 14 and 7 days. Deposits are matched to a destination, not to a campaign or an ad.
 - cost per lead, as a second signal when pax is too thin to judge.
-- seats: do not push money at a destination whose coming departures are nearly full, and do favour one with many empty seats and a departure 3 to 10 weeks away. The departure list is partial (it holds departures that already have a booking), so treat missing seats as unknown, not as zero.
+- seats and booking deadlines ("seats_by_destination"): money only helps a date that can still be sold, meaning it has seats left and its booking deadline has not passed. Favour destinations with many sellable seats on dates 3 to 10 weeks away ("sellable_3_to_10_weeks"). Do not push money at a destination whose dates are all full or closed ("nothing_to_sell": true): propose lowering or pausing its campaigns instead. Where "seats_complete" is false, the list for that destination may be partial, so treat missing seats as unknown, not as zero.
 - the month: budget, spent so far and days left. Say if the pace is too fast or too slow.
 
 Rules:
@@ -106,24 +106,32 @@ Deno.serve(async (req: Request) => {
     admin.rpc("destination_cost_range", { p_from: day(13), p_to: day(0) }),
     admin.rpc("destination_cost_range", { p_from: day(6), p_to: day(0) }),
     admin.rpc("campaign_overview_range", { p_from: day(6), p_to: day(0) }),
-    admin.from("crm_departures").select("destination_id, departure_date, seats_available").not("package_name", "is", null).gte("departure_date", day(0)).order("departure_date").limit(1000),
+    admin.from("crm_departures").select("destination_id, departure_date, seats_available, booking_deadline, seats_checked_at").not("package_name", "is", null).gte("departure_date", day(0)).order("departure_date").limit(1000),
     admin.from("destinations").select("id, name"),
     admin.rpc("dashboard_totals"),
     admin.from("ai_learnings").select("lesson, confidence").eq("is_active", true).order("id", { ascending: false }).limit(40),
     admin.from("proposals").select("action_type, target, how").eq("status", "pending").eq("agent", "analyst").eq("is_sample", false).limit(12),
   ]);
   const destName = new Map(((dests.data ?? []) as Row[]).map((d) => [String(d.id), String(d.name)]));
-  const seats: Record<string, { departures: number; seats_left: number; nearly_full: number; seats_unknown: number; next_dates: string[] }> = {};
+  type Seat = { departures: number; seats_left: number; nearly_full: number; full_or_closed: number; seats_unknown: number; sellable_3_to_10_weeks: number; next_sellable: string[]; nothing_to_sell: boolean; seats_complete: boolean };
+  const seats: Record<string, Seat> = {};
+  const in3w = day(-21), in10w = day(-70);
+  const fresh = new Date(Date.now() - 48 * 3600000).toISOString();
   for (const d of (deps.data ?? []) as Row[]) {
     const name = destName.get(String(d.destination_id)) ?? "No destination";
-    const s = (seats[name] ??= { departures: 0, seats_left: 0, nearly_full: 0, seats_unknown: 0, next_dates: [] });
+    const s = (seats[name] ??= { departures: 0, seats_left: 0, nearly_full: 0, full_or_closed: 0, seats_unknown: 0, sellable_3_to_10_weeks: 0, next_sellable: [], nothing_to_sell: true, seats_complete: true });
     s.departures++;
-    if (d.seats_available == null) s.seats_unknown++;
-    else {
-      s.seats_left += Number(d.seats_available);
-      if (Number(d.seats_available) <= 5) s.nearly_full++;
-    }
-    if (s.next_dates.length < 4) s.next_dates.push(String(d.departure_date));
+    const left = d.seats_available == null ? null : Number(d.seats_available);
+    const closed = d.booking_deadline != null && String(d.booking_deadline) < day(0);
+    if (!d.seats_checked_at || String(d.seats_checked_at) < fresh) s.seats_complete = false;
+    if (left == null) s.seats_unknown++;
+    else s.seats_left += closed ? 0 : left;
+    if (left === 0 || closed) { s.full_or_closed++; continue; }
+    s.nothing_to_sell = false;
+    if (left != null && left <= 5) s.nearly_full++;
+    const dd = String(d.departure_date);
+    if (left != null && dd >= in3w && dd <= in10w) s.sellable_3_to_10_weeks += left;
+    if (s.next_sellable.length < 4) s.next_sellable.push(`${dd} (${left == null ? "seats ?" : `${left} left`}${d.booking_deadline ? `, book by ${d.booking_deadline}` : ""})`);
   }
   const keep = (rows: unknown, keys: string[]) => (Array.isArray(rows) ? rows : []).map((r) => Object.fromEntries(keys.map((k) => [k, (r as Row)[k]])));
   const dKeys = ["destination", "country", "matched", "spend", "leads", "campaigns", "bookings", "pax"];

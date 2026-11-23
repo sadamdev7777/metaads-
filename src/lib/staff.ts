@@ -7,6 +7,7 @@ export type StaffRow = {
   role: "admin" | "staff";
   active: boolean;
   must_change_password: boolean;
+  can_approve_budget?: boolean;
   created_at: string;
   added_by_email: string | null;
   last_sign_in_at: string | null;
@@ -27,7 +28,7 @@ async function call<T = Record<string, unknown>>(body: Record<string, unknown>):
 
 export const listStaff = () => call<{ is_admin: boolean; people: StaffRow[] }>({ action: "list" });
 export const addStaff = (v: { name: string; email: string; role: string; password: string }) => call({ action: "create", ...v });
-export const updateStaff = (id: string, patch: { name?: string; role?: string; active?: boolean }) => call({ action: "update", id, ...patch });
+export const updateStaff = (id: string, patch: { name?: string; role?: string; active?: boolean; can_approve_budget?: boolean }) => call({ action: "update", id, ...patch });
 export const resetStaffPassword = (id: string, password: string) => call({ action: "reset_password", id, password });
 export const setMyPassword = (password: string) => call({ action: "set_my_password", password });
 

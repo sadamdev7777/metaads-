@@ -32,6 +32,10 @@ Deno.serve(async (req: Request) => {
   const email = who.user.email ?? "";
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const body = (await req.json().catch(() => ({}))) as Row;
+  // Only active staff can change ads. Raising a budget also needs the "can approve budget raises" right.
+  const { data: me } = await admin.from("profiles").select("active, role, can_approve_budget").eq("id", who.user.id).maybeSingle();
+  if (!me?.active) return json({ ok: false, error: "Your access is turned off. Ask an admin." }, 403);
+  const mayRaise = me.role === "admin" || Boolean(me.can_approve_budget);
 
   const { data: tokenData } = await admin.rpc("get_integration_secret", { p_name: "meta_access_token" });
   const token = typeof tokenData === "string" && tokenData.length >= 20 ? tokenData : null;
@@ -134,6 +138,7 @@ Deno.serve(async (req: Request) => {
         if (before.daily_budget == null) return json({ ok: false, error: `This ${what} has no daily budget of its own. The budget is set on the ${level === "ad_set" ? "campaign" : "ad sets"}.` });
         const next = Math.round(Number(body.new_daily_budget) * 100) / 100;
         if (!Number.isFinite(next) || next < 5) return json({ ok: false, error: "Enter the new daily budget in RM (at least RM5)." });
+        if (next > before.daily_budget && !mayRaise) return json({ ok: false, error: "Raising a budget needs an admin, or someone given that right in Settings, Users." });
         const limit = before.daily_budget * (1 + maxRaisePct / 100);
         if (next > limit + 0.001) return json({ ok: false, error: `That is more than ${maxRaisePct}% above the current RM${before.daily_budget}. The most allowed in one step is RM${Math.floor(limit)}.` });
         fields = { daily_budget: String(Math.round(next * 100)) };
@@ -164,6 +169,7 @@ Deno.serve(async (req: Request) => {
   const type = String(p.action_type ?? "").toLowerCase();
   const kind = /turn off|pause|stop/.test(type) ? "pause" : /raise|lower|increase|decrease|reduce/.test(type) && !/move/.test(type) ? "budget" : null;
   if (!kind) return json({ ok: false, manual: true, error: "This kind of proposal cannot be applied automatically. Approve it and make the change in Ads Manager." });
+  if (kind === "budget" && /raise|increase/.test(type) && !mayRaise) return json({ ok: false, error: "Raising a budget needs an admin, or someone given that right in Settings, Users." });
 
   // Find the thing in Meta: by the id the analyst gave, or by the names in the target.
   let level = ["campaign", "ad_set", "ad"].includes(p.entity_level) ? String(p.entity_level) : "";
@@ -238,6 +244,7 @@ Deno.serve(async (req: Request) => {
       if (before.daily_budget == null) throw new Error("This campaign has no daily budget to change (it may use a lifetime budget). Change it in Ads Manager.");
       const next = Math.round(Number(body.new_daily_budget) * 100) / 100;
       if (!Number.isFinite(next) || next < 5) return json({ ok: false, need_budget: true, current: before.daily_budget, max: Math.floor(before.daily_budget * (1 + maxRaisePct / 100)), level: targetLevel, name: before.name, error: "Enter the new daily budget in RM (at least RM5)." });
+      if (next > before.daily_budget && !mayRaise) return json({ ok: false, error: "Raising a budget needs an admin, or someone given that right in Settings, Users." });
       const limit = before.daily_budget * (1 + maxRaisePct / 100);
       if (next > limit + 0.001) return json({ ok: false, need_budget: true, current: before.daily_budget, max: Math.floor(limit), level: targetLevel, name: before.name, error: `That is more than ${maxRaisePct}% above the current RM${before.daily_budget}. The most allowed in one step is RM${Math.floor(limit)}.` });
       fields = { daily_budget: String(Math.round(next * 100)) };

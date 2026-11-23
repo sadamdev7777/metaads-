@@ -155,7 +155,7 @@ function Rules() {
 
       <Card title="Action modes" sub="Each action type has its own switch. All start on Approval. Auto does nothing until Phase 4.">
         <T
-          minW={760}
+          minW={880}
           heads={["Action", "AI staff", "Mode", "Who can approve", "Limit when Auto"]}
           rows={MODE_ROWS.map((m, i) => {
             const k = MODE_KEYS[i];
@@ -1145,7 +1145,7 @@ function Users() {
         <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-sm">
           <li>Only people on this list can sign in. There is no open sign-up.</li>
           <li><B>Admin</B>: everything staff can do, plus adding staff, turning access off and resetting passwords.</li>
-          <li><B>Staff</B>: full use of the system: approvals, campaigns, rules and settings.</li>
+          <li><B>Staff</B>: full use of the system: approvals, campaigns, rules and settings. Raising a budget needs an admin, or staff given <B>Can raise budgets</B> below.</li>
           <li>Every action is recorded under the person's name.</li>
         </ul>
       </Card>
@@ -1196,7 +1196,7 @@ function Users() {
         ) : (
           <T
             minW={760}
-            heads={["Name", "Email", "Role", "Status", "Last sign-in", ...(isAdmin ? [""] : [])]}
+            heads={["Name", "Email", "Role", "Raise budgets", "Status", "Last sign-in", ...(isAdmin ? [""] : [])]}
             rows={(people.length ? people : user ? [{ id: "me", email: user.email, name: user.name, role: access?.role ?? "staff", active: true, must_change_password: false, created_at: "", added_by_email: null, last_sign_in_at: null } as StaffRow] : []).map((p) => [
               <B>{p.name || "(no name)"}{p.email === user?.email ? " (you)" : ""}</B>,
               <span className="break-all">{p.email}</span>,
@@ -1207,6 +1207,16 @@ function Users() {
                 </select>
               ) : (
                 <Pill tone={p.role === "admin" ? "t" : "n"}>{p.role === "admin" ? "Admin" : "Staff"}</Pill>
+              ),
+              p.role === "admin" ? (
+                <span className="text-[13px] text-muted">Yes (admin)</span>
+              ) : isAdmin ? (
+                <label className="flex items-center gap-2 text-[13px]">
+                  <input type="checkbox" className="h-5 w-5" checked={Boolean(p.can_approve_budget)} disabled={busy === `rb-${p.id}`} onChange={(e) => void run(`rb-${p.id}`, () => updateStaff(p.id, { can_approve_budget: e.target.checked }), e.target.checked ? `${p.name || p.email} can now raise budgets.` : `${p.name || p.email} can no longer raise budgets.`)} />
+                  Can raise budgets
+                </label>
+              ) : (
+                <span className="text-[13px]">{p.can_approve_budget ? "Yes" : "No"}</span>
               ),
               !p.active ? <Pill tone="r">Turned off</Pill> : p.must_change_password ? <Pill tone="a">Waiting for first sign-in</Pill> : <Pill tone="g">Active</Pill>,
               when(p.last_sign_in_at),

@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (body.action === "list") {
-    const { data: people } = await admin.from("profiles").select("id, email, name, role, active, must_change_password, created_at, added_by_email").order("created_at");
+    const { data: people } = await admin.from("profiles").select("id, email, name, role, active, must_change_password, can_approve_budget, created_at, added_by_email").order("created_at");
     const seen = new Map<string, string | null>();
     for (let page = 1; page <= 10; page++) {
       const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 });
@@ -80,6 +80,7 @@ Deno.serve(async (req: Request) => {
     if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim().slice(0, 80);
     if (body.role === "admin" || body.role === "staff") patch.role = body.role;
     if (typeof body.active === "boolean") patch.active = body.active;
+    if (typeof body.can_approve_budget === "boolean") patch.can_approve_budget = body.can_approve_budget;
     // Keep at least one active admin, and never lock yourself out.
     const losesAdmin = target.role === "admin" && target.active && (patch.role === "staff" || patch.active === false);
     if (losesAdmin) {
@@ -93,7 +94,7 @@ Deno.serve(async (req: Request) => {
     }
     const { error } = await admin.from("profiles").update(patch).eq("id", target.id);
     if (error) return json({ ok: false, error: error.message });
-    const what = patch.active === false ? "Turned off access for" : patch.active === true ? "Turned on access for" : patch.role ? `Made ${patch.role}:` : "Renamed";
+    const what = patch.active === false ? "Turned off access for" : patch.active === true ? "Turned on access for" : patch.role ? `Made ${patch.role}:` : typeof patch.can_approve_budget === "boolean" ? (patch.can_approve_budget ? "Allowed budget raises for" : "Removed budget raises for") : "Renamed";
     await log(`${what} ${target.name} (${target.email})`);
     return json({ ok: true });
   }
