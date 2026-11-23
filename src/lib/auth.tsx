@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "./supabase";
 
 export type AppUser = { email: string; name: string };
+/** The person's place on the staff list. null while loading or in demo mode. */
+export type Access = { role: "admin" | "staff"; active: boolean; mustChange: boolean };
 
 type AuthState = {
   user: AppUser | null;
@@ -9,6 +11,9 @@ type AuthState = {
   demo: boolean;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
+  access: Access | null;
+  accessLoaded: boolean;
+  refreshAccess: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -23,6 +28,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const demo = supabase === null;
+  const [access, setAccess] = useState<Access | null>(null);
+  const [accessLoaded, setAccessLoaded] = useState(false);
+
+  async function refreshAccess() {
+    if (!supabase) {
+      setAccess({ role: "admin", active: true, mustChange: false });
+      setAccessLoaded(true);
+      return;
+    }
+    const { data: s } = await supabase.auth.getSession();
+    const id = s.session?.user?.id;
+    if (!id) {
+      setAccess(null);
+      setAccessLoaded(true);
+      return;
+    }
+    const { data } = await supabase.from("profiles").select("role, active, must_change_password").eq("id", id).maybeSingle();
+    setAccess(data ? { role: data.role === "admin" ? "admin" : "staff", active: Boolean(data.active), mustChange: Boolean(data.must_change_password) } : { role: "staff", active: false, mustChange: false });
+    setAccessLoaded(true);
+  }
 
   useEffect(() => {
     if (!supabase) {
@@ -35,10 +60,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = data.session?.user;
       setUser(u?.email ? { email: u.email, name: (u.user_metadata?.name as string) || nameFromEmail(u.email) } : null);
       setLoading(false);
+      void refreshAccess();
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user;
       setUser(u?.email ? { email: u.email, name: (u.user_metadata?.name as string) || nameFromEmail(u.email) } : null);
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        setAccessLoaded(false);
+        // Supabase asks not to await other calls inside this callback.
+        setTimeout(() => void refreshAccess(), 0);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -50,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = { email, name: nameFromEmail(email) };
       sessionStorage.setItem(DEMO_KEY, JSON.stringify(u));
       setUser(u);
+      void refreshAccess();
       return null;
     }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -65,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }
 
-  return <AuthContext.Provider value={{ user, loading, demo, signIn, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, demo, signIn, signOut, access, accessLoaded, refreshAccess }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

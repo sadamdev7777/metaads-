@@ -15,9 +15,10 @@ import Analysis from "./pages/Analysis";
 import AIOffice from "./pages/AIOffice";
 import History from "./pages/History";
 import Settings from "./pages/Settings";
+import { ChangePassword, NoAccess } from "./pages/Account";
 
 export default function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, access, accessLoaded } = useAuth();
 
   if (loading) return <div className="p-8 text-sm text-muted">Loading…</div>;
 
@@ -28,6 +29,10 @@ export default function App() {
       </Routes>
     );
   }
+
+  if (!accessLoaded) return <div className="p-8 text-sm text-muted">Loading…</div>;
+  if (!access?.active) return <NoAccess />;
+  if (access.mustChange) return <ChangePassword first />;
 
   return (
     <StoreProvider>
@@ -46,6 +51,7 @@ export default function App() {
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Navigate to="/settings/rules" replace />} />
           <Route path="/settings/:tab" element={<Settings />} />
+          <Route path="/password" element={<ChangePassword />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>

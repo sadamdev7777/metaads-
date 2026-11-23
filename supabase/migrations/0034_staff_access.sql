@@ -1,0 +1,4 @@
+-- Applied through Supabase: staff list (profiles.role, active, must_change_password, added_by_email, last_seen_at),
+-- is_staff()/is_admin(), every authenticated policy now requires an active staff member,
+-- and the four SECURITY DEFINER rpcs refuse signed-in people who are not active staff.
+-- New sign-ups get active = false, so nobody can use the system until an admin adds them in Settings, Users.

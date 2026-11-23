@@ -8,6 +8,7 @@ import { type Destination, analyst, count, fetchDestinations, rematch, removeDes
 import AdSchedule from "../components/AdSchedule";
 import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
+import { addStaff, listStaff, makePassword, resetStaffPassword, updateStaff, type StaffRow } from "../lib/staff";
 
 const TABS = [
   { key: "rules", label: "Rules", sub: "AI staff follow these as soon as they are saved." },
@@ -1077,50 +1078,153 @@ function DataHealth() {
 /* ---------------- Users ---------------- */
 
 function Users() {
-  const { act } = useStore();
-  const { user, demo } = useAuth();
-  const [people, setPeople] = useState<{ email: string; name: string | null; created_at: string; is_superadmin?: boolean }[]>([]);
+  const { user, demo, access } = useAuth();
+  const [people, setPeople] = useState<StaffRow[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loadErr, setLoadErr] = useState("");
   const [log, setLog] = useState<ActivityRow[]>([]);
   const [source, setSource] = useState<"supabase" | "browser">("browser");
+  const [form, setForm] = useState({ name: "", email: "", role: "staff", password: "" });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState("");
+  const [shown, setShown] = useState<{ email: string; password: string } | null>(null);
 
   async function refresh() {
     const a = await fetchActivity();
     setLog(a.rows);
     setSource(a.source);
-    if (supabase) {
-      const { data } = await supabase.from("profiles").select("email, name, created_at, is_superadmin").order("created_at");
-      if (data) setPeople(data);
-    }
+    const r = await listStaff();
+    if (r.ok && r.people) {
+      setPeople(r.people);
+      setIsAdmin(Boolean(r.is_admin));
+      setLoadErr("");
+    } else setLoadErr(r.error ?? "Could not load the staff list.");
   }
   useEffect(() => {
     void refresh();
   }, []);
 
+  async function run(key: string, job: () => Promise<{ ok: boolean; error?: string }>, done: string) {
+    setBusy(key);
+    setMsg(null);
+    const r = await job();
+    setBusy("");
+    setMsg(r.ok ? { ok: true, text: done } : { ok: false, text: r.error ?? "Something went wrong." });
+    if (r.ok) await refresh();
+    return r.ok;
+  }
+
+  async function add() {
+    const password = form.password || makePassword();
+    const ok = await run("add", () => addStaff({ ...form, password }), `${form.name} added. Give them the email and temporary password below; they choose their own at first sign-in.`);
+    if (ok) {
+      setShown({ email: form.email.trim().toLowerCase(), password });
+      setForm({ name: "", email: "", role: "staff", password: "" });
+    }
+  }
+  async function reset(p: StaffRow) {
+    if (!window.confirm(`Set a new temporary password for ${p.name || p.email}? Their current password stops working.`)) return;
+    const password = makePassword();
+    const ok = await run(`pw-${p.id}`, () => resetStaffPassword(p.id, password), `New temporary password set for ${p.name || p.email}.`);
+    if (ok) setShown({ email: p.email, password });
+  }
+  async function toggle(p: StaffRow) {
+    if (p.active && !window.confirm(`Turn off access for ${p.name || p.email}? They are signed out and cannot sign in again until it is turned back on.`)) return;
+    await run(`on-${p.id}`, () => updateStaff(p.id, { active: !p.active }), p.active ? `Access turned off for ${p.name || p.email}.` : `Access turned back on for ${p.name || p.email}.`);
+  }
+  async function role(p: StaffRow, r: string) {
+    await run(`role-${p.id}`, () => updateStaff(p.id, { role: r }), `${p.name || p.email} is now ${r === "admin" ? "an admin" : "staff"}.`);
+  }
+
   const when = (iso?: string | null) => (iso && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "–");
-  const list: typeof people = people.length ? people : user ? [{ email: user.email, name: user.name, created_at: new Date().toISOString() }] : [];
+  const sel = "min-h-[36px] rounded-lg border border-[#9AA39E] bg-white px-2 text-[13px]";
 
   return (
     <>
       <Card>
-        <div className="text-sm">
-          Everyone has full access and there are no restrictions by role. The system keeps a record of who did what, taken from the sign-in. Run by on
-          each campaign also comes from the sign-in.
-        </div>
+        <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-sm">
+          <li>Only people on this list can sign in. There is no open sign-up.</li>
+          <li><B>Admin</B>: everything staff can do, plus adding staff, turning access off and resetting passwords.</li>
+          <li><B>Staff</B>: full use of the system: approvals, campaigns, rules and settings.</li>
+          <li>Every action is recorded under the person's name.</li>
+        </ul>
       </Card>
 
-      <Card
-        title="Users"
-        right={
-          <Btn onClick={() => act("Pressed Invite user", "Settings, Users", "For now, add users in the Supabase dashboard under Authentication. Inviting from here arrives with Phase 1.")}>
-            Invite user
+      {isAdmin && (
+        <Card title="Add a staff member" sub="They sign in with this email and the temporary password, then choose their own password.">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <Field id="st-name" label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
+            <Field id="st-email" label="Work email" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
+            <div className="flex min-w-0 flex-col gap-1 sm:min-w-[140px] sm:gap-1.5">
+              <label htmlFor="st-role" className="text-[12px] font-semibold sm:text-[13px]">Role</label>
+              <select id="st-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                <option value="staff">Staff</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <Field id="st-pw" label="Temporary password" value={form.password} placeholder="Leave empty to make one" note="At least 10 characters, letters and numbers." onChange={(v) => setForm({ ...form, password: v })} />
+            <Btn onClick={() => void add()} disabled={busy === "add" || !form.name.trim() || !form.email.trim()}>{busy === "add" ? "Adding…" : "Add staff"}</Btn>
+          </div>
+        </Card>
+      )}
+
+      {msg && (
+        <div role={msg.ok ? "status" : "alert"} className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${msg.ok ? "bg-[#E3F2EC] text-[#0B5A43]" : "bg-[#FBE6E3] text-[#A3231B]"}`}>
+          {msg.text}
+        </div>
+      )}
+      {shown && (
+        <Card title="Give these to the staff member" right={<Btn kind="s" small onClick={() => setShown(null)}>Done, hide it</Btn>} sub="Shown once. Send it privately, for example by WhatsApp to that person only.">
+          <div className="flex flex-col gap-1 text-sm">
+            <div>Website: <B>{window.location.origin}</B></div>
+            <div>Email: <B>{shown.email}</B></div>
+            <div>Temporary password: <code className="rounded bg-[#ECEFEC] px-1.5 py-0.5 text-[15px] font-bold">{shown.password}</code></div>
+          </div>
+          <Btn kind="s" small className="self-start" onClick={() => void navigator.clipboard?.writeText(`MTB Marketing AI\n${window.location.origin}\nEmail: ${shown.email}\nTemporary password: ${shown.password}\nYou will choose your own password at first sign-in.`)}>
+            Copy message
           </Btn>
-        }
-        sub={demo ? "Demo mode: showing the current sign-in only." : "Accounts are created in Supabase Authentication. There is no open sign-up."}
+        </Card>
+      )}
+
+      <Card
+        title="Staff"
+        right={<Pill tone="n">{people.filter((p) => p.active).length} active</Pill>}
+        sub={demo ? "Demo mode: showing the current sign-in only." : isAdmin ? "Change a role, turn access off or on, or set a new temporary password." : "Only an admin can change this list."}
       >
-        <T
-          heads={["Name", "Email", "Access", "Added"]}
-          rows={list.map((p) => [<B>{p.name || "(no name)"}</B>, <span className="break-all">{p.email}</span>, p.is_superadmin ? <Pill tone="t">Superadmin</Pill> : <Pill tone="g">Full access</Pill>, when(p.created_at)])}
-        />
+        {loadErr ? (
+          <div className="text-sm text-[#A3231B]">{loadErr}</div>
+        ) : (
+          <T
+            minW={760}
+            heads={["Name", "Email", "Role", "Status", "Last sign-in", ...(isAdmin ? [""] : [])]}
+            rows={(people.length ? people : user ? [{ id: "me", email: user.email, name: user.name, role: access?.role ?? "staff", active: true, must_change_password: false, created_at: "", added_by_email: null, last_sign_in_at: null } as StaffRow] : []).map((p) => [
+              <B>{p.name || "(no name)"}{p.email === user?.email ? " (you)" : ""}</B>,
+              <span className="break-all">{p.email}</span>,
+              isAdmin && p.email !== user?.email ? (
+                <select aria-label={`Role for ${p.name || p.email}`} className={sel} value={p.role} disabled={busy === `role-${p.id}`} onChange={(e) => void role(p, e.target.value)}>
+                  <option value="staff">Staff</option>
+                  <option value="admin">Admin</option>
+                </select>
+              ) : (
+                <Pill tone={p.role === "admin" ? "t" : "n"}>{p.role === "admin" ? "Admin" : "Staff"}</Pill>
+              ),
+              !p.active ? <Pill tone="r">Turned off</Pill> : p.must_change_password ? <Pill tone="a">Waiting for first sign-in</Pill> : <Pill tone="g">Active</Pill>,
+              when(p.last_sign_in_at),
+              ...(isAdmin
+                ? [
+                    p.email === user?.email ? (
+                      ""
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <Btn kind="s" small disabled={busy === `pw-${p.id}` || !p.active} onClick={() => void reset(p)}>New password</Btn>
+                        <Btn kind={p.active ? "x" : "p"} small disabled={busy === `on-${p.id}`} onClick={() => void toggle(p)}>{p.active ? "Turn off" : "Turn on"}</Btn>
+                      </div>
+                    ),
+                  ]
+                : []),
+            ])}
+          />
+        )}
       </Card>
 
       <Card

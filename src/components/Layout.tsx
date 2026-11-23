@@ -1,6 +1,6 @@
 import ChatBubble from "./ChatBubble";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { pendingCount } from "../lib/live";
 import { useStore } from "../lib/store";
@@ -93,9 +93,12 @@ export default function Layout() {
       {open && (
         <div id="mobile-menu" className="border-b border-line bg-white p-3 md:hidden">
           {links}
-          <button type="button" onClick={() => void signOut()} className="mt-2 min-h-[36px] sm:min-h-[44px] px-3 text-sm font-semibold text-brand">
-            Sign out
-          </button>
+          <div className="mt-2 flex gap-4 px-3">
+            <Link to="/password" onClick={() => setOpen(false)} className="flex min-h-[36px] items-center text-sm font-semibold text-brand">Change password</Link>
+            <button type="button" onClick={() => void signOut()} className="min-h-[36px] text-sm font-semibold text-brand">
+              Sign out
+            </button>
+          </div>
         </div>
       )}
 
@@ -110,9 +113,12 @@ export default function Layout() {
         <div className="mt-auto px-3 text-xs text-muted">
           <div className="break-all font-semibold text-ink">{user?.name}</div>
           <div className="break-all">{user?.email}</div>
-          <button type="button" onClick={() => void signOut()} className="mt-1 min-h-[36px] sm:min-h-[44px] text-[13px] font-semibold text-brand">
-            Sign out
-          </button>
+          <div className="mt-1 flex gap-3">
+            <Link to="/password" className="flex min-h-[36px] items-center text-[13px] font-semibold text-brand">Change password</Link>
+            <button type="button" onClick={() => void signOut()} className="min-h-[36px] text-[13px] font-semibold text-brand">
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 

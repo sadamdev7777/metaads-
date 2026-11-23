@@ -69,8 +69,8 @@ export default function Login() {
             {busy ? "Signing in…" : "Sign in"}
           </button>
           <p className="m-0 text-[13px] text-muted">
-            Everyone on the team has full access. Every action is recorded under the name you sign in with. There is no open sign-up: ask for an
-            account to be added.
+            There is no open sign-up: an admin adds each staff member in Settings, Users. Every action is recorded under the name you sign in
+            with.
           </p>
         </form>
       </div>
