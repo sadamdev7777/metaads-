@@ -71,7 +71,7 @@ Deno.serve(async (req: Request) => {
     return (data?.config ?? {}) as { accounts?: Account[]; selected?: string[] };
   };
   const describe = (accounts: Account[], selected: string[]) =>
-    `Token is valid. ${accounts.length} ad account${accounts.length === 1 ? "" : "s"} visible, ${selected.length} selected. Read only until Phase 2.`;
+    `Token is valid. ${accounts.length} ad account${accounts.length === 1 ? "" : "s"} visible, ${selected.length} selected. Can run and change ads (new ones start paused).`;
 
   switch (body.action) {
     case "save_token": {

@@ -1,5 +1,5 @@
-// Pulls campaigns, ad sets, ads and daily spend from Meta into the database. Read only: it never
-// changes anything in Meta. Runs hourly from the database, or when someone presses Sync now.
+// Pulls campaigns, ad sets, ads and daily spend from Meta into the database. It only reads:
+// changes to Meta go through other functions. Runs hourly from the database, or when someone presses Sync now.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -211,7 +211,7 @@ Deno.serve(async (req: Request) => {
     }
     await admin.from("integration_status").update({
       status: "connected", last_checked_at: now,
-      ...(scope === "all" ? { detail: `Last sync ${now.slice(0, 16).replace("T", " ")} UTC: ${totals.campaigns} campaigns, ${totals.ad_sets} ad sets, ${totals.ads} ads. Read only until Phase 2.` } : {}),
+      ...(scope === "all" ? { detail: `Last sync ${now.slice(0, 16).replace("T", " ")} UTC: ${totals.campaigns} campaigns, ${totals.ad_sets} ad sets, ${totals.ads} ads.` } : {}),
     }).eq("key", "meta_ads");
     await finish(true, totals);
     return json({ ok: true, ...totals });

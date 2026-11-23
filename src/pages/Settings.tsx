@@ -709,7 +709,7 @@ function MetaAdsCard({ row, reload }: { row: Integ; reload: () => Promise<void> 
           </div>
         </fieldset>
       )}
-      <p className="m-0 text-[13px] text-muted">Read only for now: the system cannot change anything in Meta until Phase 2.</p>
+      <p className="m-0 text-[13px] text-muted">The system can pause, change budgets and create ads in Meta. Anything new it creates starts paused until a person turns it on.</p>
     </Card>
   );
 }
