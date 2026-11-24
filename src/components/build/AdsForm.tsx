@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { B, Btn, Pill } from "../ui";
 import { type AdDraft, CTAS, type SourceAd, type WinAd, blankAd, builder, uid } from "../../lib/build";
-import { type MediaItem, cpl, rm } from "../../lib/live";
+import { type MediaItem, type MetaImage, cpl, metaImages, rm } from "../../lib/live";
 import { Fld, INPUT, Seg } from "./parts";
 
 type CopyOption = { angle: string; primary_text: string; headline: string; description: string };
@@ -88,6 +88,16 @@ function AdCard({ ad, n, media, destId, winners, patch, remove, duplicate, onNot
   const [options, setOptions] = useState<CopyOption[]>([]);
   const [busy, setBusy] = useState("");
   const [full, setFull] = useState(false);
+  const [metaImgs, setMetaImgs] = useState<MetaImage[] | null>(null);
+  const [metaNext, setMetaNext] = useState("");
+  async function loadMeta(after = "") {
+    setBusy("Loading pictures from Meta…");
+    const r = await metaImages(after);
+    setBusy("");
+    if (!r.ok) return onNote(r.error ?? "Could not load the pictures from Meta.");
+    setMetaImgs((old) => [...(after ? old ?? [] : []), ...(r.images ?? [])]);
+    setMetaNext(r.next ?? "");
+  }
   const canSame = Boolean(ad.image_hash || ad.video_id);
   const modes = [
     ...(ad.creative_id ? [{ v: "reuse" as const, t: "Use the ad as it is", d: "The same picture or video and the same words as the ad that already works. The safest copy." }] : []),
@@ -132,7 +142,11 @@ function AdCard({ ad, n, media, destId, winners, patch, remove, duplicate, onNot
           {ad.from.cpl ? ` · ${ad.from.cpl} a lead` : ""}
         </div>
       )}
-      <Seg label="What this ad uses" value={ad.mode} options={modes} onChange={(v) => patch({ mode: v })} />
+      {modes.length > 1 ? (
+        <Seg label="What this ad uses" value={ad.mode} options={modes} onChange={(v) => patch({ mode: v })} />
+      ) : (
+        <div className="text-[13px] text-muted">Choose a picture or video below: one from Media, or one already used in Meta.</div>
+      )}
 
       {ad.mode !== "library" ? (
         <div className="flex items-center gap-3">
@@ -161,6 +175,26 @@ function AdCard({ ad, n, media, destId, winners, patch, remove, duplicate, onNot
             </div>
           )}
           {chosen && <div className="text-[13px]">Chosen: <B>{chosen.file_name}</B></div>}
+          <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3">
+            <div className="text-[13px] font-semibold">Or use a picture already in Meta</div>
+            {metaImgs === null ? (
+              <Btn small kind="s" className="self-start" disabled={busy !== ""} onClick={() => void loadMeta()}>Show pictures from past ads</Btn>
+            ) : metaImgs.length === 0 ? (
+              <div className="text-[13px] text-muted">No pictures found in the ad account.</div>
+            ) : (
+              <>
+                <div className="grid max-h-[300px] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-6">
+                  {metaImgs.map((m) => (
+                    <button key={m.hash} type="button" onClick={() => patch({ mode: "same", image_hash: m.hash, video_id: undefined, kind: "image", thumb: m.thumb, media_id: undefined, name: /^Ad \d+$/.test(ad.name) ? `PNG ${m.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 24)}` : ad.name })} className="flex flex-col overflow-hidden rounded-lg border-2 border-line bg-white p-0 text-left">
+                      <img src={m.thumb} alt="" loading="lazy" className="aspect-square w-full object-cover" />
+                      <span className="truncate px-1.5 py-1 text-[11px]">{m.name || "picture"}</span>
+                    </button>
+                  ))}
+                </div>
+                {metaNext && <Btn small kind="s" className="self-start" disabled={busy !== ""} onClick={() => void loadMeta(metaNext)}>Show more</Btn>}
+              </>
+            )}
+          </div>
         </Fld>
       )}
 
