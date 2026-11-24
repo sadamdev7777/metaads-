@@ -1,5 +1,5 @@
-// Lists pictures already in the MTB ad account, newest first, so Run campaign can build an ad from one
-// without uploading it again. Read only.
+// Lists pictures already in the MTB ad account, so Run campaign can build an ad from one without uploading it
+// again: by default the pictures of ads running now, or with running:false every picture, newest first. Read only.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -30,6 +30,24 @@ Deno.serve(async (req: Request) => {
   if (!token || !account) return json({ ok: false, error: "Meta Ads is not connected." });
 
   const body = (await req.json().catch(() => ({}))) as Row;
+  // Pictures of the ads running now (the default), each once.
+  if (body.running !== false) {
+    const filter = encodeURIComponent(JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]));
+    const r = await fetch(`https://graph.facebook.com/v27.0/act_${account}/ads?fields=name,creative{image_hash,image_url,thumbnail_url,object_story_spec}&filtering=${filter}&limit=200`, { headers: { Authorization: `Bearer ${token}` } });
+    const o = (await r.json().catch(() => ({}))) as Row;
+    if (!r.ok || o.error) return json({ ok: false, error: String(((o.error ?? {}) as Row).message ?? `Meta answered with status ${r.status}`) });
+    const seen = new Set<string>();
+    const images: Row[] = [];
+    for (const ad of (o.data ?? []) as Row[]) {
+      const c = (ad.creative ?? {}) as Row;
+      const link = (((c.object_story_spec ?? {}) as Row).link_data ?? {}) as Row;
+      const hash = String(c.image_hash ?? link.image_hash ?? "");
+      if (!/^[0-9a-f]{32}$/.test(hash) || seen.has(hash)) continue;
+      seen.add(hash);
+      images.push({ hash, name: String(ad.name ?? ""), thumb: String(c.thumbnail_url ?? c.image_url ?? ""), url: String(c.image_url ?? c.thumbnail_url ?? ""), width: 0, height: 0, created: "" });
+    }
+    return json({ ok: true, images, next: "" });
+  }
   const after = typeof body.after === "string" && /^[\w=-]+$/.test(body.after) ? `&after=${body.after}` : "";
   const res = await fetch(`https://graph.facebook.com/v27.0/act_${account}/adimages?fields=hash,name,permalink_url,url_128,width,height,created_time,status&limit=48${after}`, { headers: { Authorization: `Bearer ${token}` } });
   const out = (await res.json().catch(() => ({}))) as Row;

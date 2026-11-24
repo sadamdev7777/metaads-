@@ -32,21 +32,28 @@ export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk
     set([...ads, fromSource(s, w, defaults)]);
   }
   const used = new Set(ads.map((a) => a.from?.id));
-  const offer = winners.filter((w) => !used.has(w.id)).slice(0, more ? 20 : 5);
+  const [paused, setPaused] = useState(false);
+  const pool = winners.filter((w) => !used.has(w.id) && (paused || w.status === "ACTIVE"));
+  const offer = pool.slice(0, more ? 20 : 5);
 
   return (
     <>
       {!creativeOk && <div className="rounded-lg bg-[#FBE6E3] px-3 py-2.5 text-[13px] text-[#7A1A14]">You can prepare the ads now. Meta will refuse to create them until the Page access is fixed (see the note at the top).</div>}
 
       <div className="flex flex-col gap-2">
-        <div className="text-[13px] font-semibold">Add one of the best ads {destId ? "for this destination" : "in the account"} (last 30 days, cheapest leads first)</div>
-        {offer.length === 0 && <div className="text-[13px] text-muted">No more ads with leads to offer here.</div>}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[13px] font-semibold">Add one of the best {paused ? "" : "running "}ads {destId ? "for this destination" : "in the account"} (last 30 days, cheapest leads first)</div>
+          <label className="flex items-center gap-2 text-[13px]">
+            <input type="checkbox" checked={paused} onChange={(e) => setPaused(e.target.checked)} className="h-4 w-4" /> Show paused ads too
+          </label>
+        </div>
+        {offer.length === 0 && <div className="text-[13px] text-muted">{paused ? "No more ads with leads to offer here." : "No running ads with leads here. Tick Show paused ads too to see older ones."}</div>}
         <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-lg border border-line p-0">
           {offer.map((w) => (
             <li key={w.id} className="flex items-center gap-2 px-3 py-2">
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 text-sm font-bold">
-                  {w.ad} {w.proven && <Pill tone="g">Proven</Pill>}
+                  {w.ad} {w.proven && <Pill tone="g">Proven</Pill>} {w.status !== "ACTIVE" && <Pill tone="n">Paused</Pill>}
                 </span>
                 <span className="block break-words text-[12px] text-muted">
                   {w.campaign} · <B>{cpl(w.spend, w.leads)}</B> a lead · {w.leads} leads · {rm(w.spend)}
@@ -59,7 +66,7 @@ export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk
           ))}
         </ul>
         <div className="flex flex-wrap gap-2">
-          {winners.filter((w) => !used.has(w.id)).length > 5 && (
+          {pool.length > 5 && (
             <Btn small kind="s" onClick={() => setMore(!more)}>
               {more ? "Show fewer" : "Show more"}
             </Btn>
@@ -153,7 +160,7 @@ function AdCard({ ad, n, media, destId, winners, patch, remove, duplicate, onNot
             ) : (
               <>
                 <div className="font-bold">Tap to choose a picture or video</div>
-                <div className="text-muted">Upload a new one, pick from Media, or reuse one from a past ad.</div>
+                <div className="text-muted">Upload a new one, pick from Media, or reuse one from a running ad.</div>
               </>
             )}
           </div>

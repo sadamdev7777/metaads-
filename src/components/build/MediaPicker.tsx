@@ -18,6 +18,7 @@ export function MediaPicker({ destId, initial, onPick, onClose }: { destId: stri
   const [tab, setTab] = useState<"upload" | "library" | "meta">(mine.length ? "library" : "meta");
   const [meta, setMeta] = useState<MetaImage[] | null>(null);
   const [next, setNext] = useState("");
+  const [older, setOlder] = useState(false);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
 
@@ -31,10 +32,10 @@ export function MediaPicker({ destId, initial, onPick, onClose }: { destId: stri
     };
   }, [onClose]);
 
-  async function loadMeta(after = "") {
+  async function loadMeta(after = "", old = older) {
     setBusy("Loading pictures from Meta…");
     setErr("");
-    const r = await metaImages(after);
+    const r = await metaImages(after, !old);
     setBusy("");
     if (!r.ok) return setErr(r.error ?? "Could not load the pictures from Meta.");
     setMeta((old) => [...(after ? old ?? [] : []), ...(r.images ?? [])]);
@@ -65,7 +66,7 @@ export function MediaPicker({ destId, initial, onPick, onClose }: { destId: stri
   const tabs: { v: typeof tab; t: string }[] = [
     { v: "upload", t: "Upload new" },
     { v: "library", t: `Media library (${mine.length})` },
-    { v: "meta", t: "From past ads" },
+    { v: "meta", t: "From ads in Meta" },
   ];
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" onClick={onClose}>
@@ -106,7 +107,7 @@ export function MediaPicker({ destId, initial, onPick, onClose }: { destId: stri
                   Nothing in Media{destId && !all ? " for this destination" : ""} yet.
                   <div className="flex flex-wrap gap-2">
                     <Btn small onClick={() => setTab("upload")}>Upload new</Btn>
-                    <Btn small kind="s" onClick={() => setTab("meta")}>Use a picture from a past ad</Btn>
+                    <Btn small kind="s" onClick={() => setTab("meta")}>Use a picture from a running ad</Btn>
                   </div>
                 </div>
               ) : (
@@ -124,7 +125,12 @@ export function MediaPicker({ destId, initial, onPick, onClose }: { destId: stri
 
           {tab === "meta" && (
             <>
-              <p className="m-0 mb-3 text-[13px] text-muted">Pictures already used in MTB's ad account, newest first. Nothing is uploaded again.</p>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="m-0 text-[13px] text-muted">{older ? "Every picture in MTB's ad account, newest first." : "Pictures of the ads running now."} Nothing is uploaded again.</p>
+                <label className="flex items-center gap-2 text-[13px]">
+                  <input type="checkbox" checked={older} disabled={busy !== ""} onChange={(e) => { setOlder(e.target.checked); setMeta(null); void loadMeta("", e.target.checked); }} className="h-4 w-4" /> Show older pictures too
+                </label>
+              </div>
               {meta && meta.length === 0 && !busy && <div className="text-sm text-muted">No pictures found in the ad account.</div>}
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                 {(meta ?? []).map((m) => (

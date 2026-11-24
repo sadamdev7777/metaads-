@@ -468,9 +468,9 @@ export async function tagPackage(packageName: string, destinationId: string) {
 
 export type MetaImage = { hash: string; name: string; thumb: string; url: string; width: number; height: number; created: string };
 /** Pictures already in the ad account, newest first (48 at a time). */
-export async function metaImages(after = ""): Promise<{ ok: boolean; error?: string; images?: MetaImage[]; next?: string }> {
+export async function metaImages(after = "", running = true): Promise<{ ok: boolean; error?: string; images?: MetaImage[]; next?: string }> {
   if (!supabase) return { ok: false, error: "Supabase is not connected in this build." };
-  const { data, error } = await supabase.functions.invoke("meta-images", { body: { after } });
+  const { data, error } = await supabase.functions.invoke("meta-images", { body: { after, running } });
   if (error && !data) return { ok: false, error: error.message };
   return data ?? { ok: false, error: "No answer." };
 }
