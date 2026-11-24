@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { B, Btn, Pill } from "../ui";
 import { type AdDraft, CTAS, type SourceAd, type WinAd, blankAd, builder, uid } from "../../lib/build";
-import { type MediaItem, type MetaImage, cpl, metaImages, rm } from "../../lib/live";
+import { type MediaItem, cpl, rm } from "../../lib/live";
+import { MediaPicker } from "./MediaPicker";
 import { Fld, INPUT, Seg } from "./parts";
 
 type CopyOption = { angle: string; primary_text: string; headline: string; description: string };
@@ -82,30 +82,17 @@ export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk
 function AdCard({ ad, n, media, destId, winners, patch, remove, duplicate, onNote }: {
   ad: AdDraft; n: number; media: MediaItem[]; destId: string; winners: WinAd[]; patch: (p: Partial<AdDraft>) => void; remove: () => void; duplicate: () => void; onNote: (t: string) => void;
 }) {
-  const [all, setAll] = useState(false);
   const [mira, setMira] = useState(false);
   const [notes, setNotes] = useState("");
   const [options, setOptions] = useState<CopyOption[]>([]);
   const [busy, setBusy] = useState("");
   const [full, setFull] = useState(false);
-  const [metaImgs, setMetaImgs] = useState<MetaImage[] | null>(null);
-  const [metaNext, setMetaNext] = useState("");
-  async function loadMeta(after = "") {
-    setBusy("Loading pictures from Meta…");
-    const r = await metaImages(after);
-    setBusy("");
-    if (!r.ok) return onNote(r.error ?? "Could not load the pictures from Meta.");
-    setMetaImgs((old) => [...(after ? old ?? [] : []), ...(r.images ?? [])]);
-    setMetaNext(r.next ?? "");
-  }
+  const [picking, setPicking] = useState(false);
   const canSame = Boolean(ad.image_hash || ad.video_id);
-  const modes = [
-    ...(ad.creative_id ? [{ v: "reuse" as const, t: "Use the ad as it is", d: "The same picture or video and the same words as the ad that already works. The safest copy." }] : []),
-    ...(canSame ? [{ v: "same" as const, t: "Same media, new words", d: "Keeps the picture or video. You change the text, headline, link or button." }] : []),
-    { v: "library" as const, t: "Media from the library", d: "A picture or video uploaded in Media, with your own words." },
-  ];
-  const shown = media.filter((m) => all || !destId || m.destination_id === destId);
-  const chosen = media.find((m) => m.id === ad.media_id);
+  const chosen = ad.mode === "library" ? media.find((m) => m.id === ad.media_id) : undefined;
+  const chosenVideo = Boolean(chosen && (chosen.format === "MP4" || /\.(mp4|mov)$/i.test(chosen.file_name)));
+  const thumbUrl = chosen ? chosen.url : ad.mode !== "library" ? ad.thumb : undefined;
+  const hasMedia = Boolean(chosen || (ad.mode !== "library" && (ad.image_hash || ad.video_id || ad.creative_id)));
   const edit = ad.mode !== "reuse";
 
   async function copyWords(id: string) {
@@ -142,60 +129,42 @@ function AdCard({ ad, n, media, destId, winners, patch, remove, duplicate, onNot
           {ad.from.cpl ? ` · ${ad.from.cpl} a lead` : ""}
         </div>
       )}
-      {modes.length > 1 ? (
-        <Seg label="What this ad uses" value={ad.mode} options={modes} onChange={(v) => patch({ mode: v })} />
-      ) : (
-        <div className="text-[13px] text-muted">Choose a picture or video below: one from Media, or one already used in Meta.</div>
+      {ad.creative_id && (
+        <Seg label="What this ad uses" value={ad.mode === "reuse" ? "reuse" : "edit"} options={[
+          { v: "reuse", t: "Use the ad as it is", d: "The same picture or video and the same words as the ad that already works. The safest copy." },
+          { v: "edit", t: "Change the words or picture", d: "Start from this ad, then change the text, link, button or picture." },
+        ]} onChange={(v) => patch({ mode: v === "reuse" ? "reuse" : canSame ? "same" : "library" })} />
       )}
 
-      {ad.mode !== "library" ? (
-        <div className="flex items-center gap-3">
-          {ad.thumb ? <img src={ad.thumb} alt="" className="h-16 w-16 flex-none rounded-lg border border-line object-cover" /> : <div className="h-16 w-16 flex-none rounded-lg bg-white" />}
-          <div className="text-[13px]">{ad.kind === "video" ? "Video" : "Picture"} already in the ad account. Nothing to upload.</div>
-        </div>
-      ) : (
-        <Fld label="Picture or video" hint={<>Showing {all || !destId ? "all media" : "media for this destination"}. <Link to="/media">Upload in Media</Link></>}>
-          <label className="flex min-h-[36px] items-center gap-2 text-[13px]">
-            <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} className="h-4 w-4" /> Show all destinations
-          </label>
-          {shown.length === 0 ? (
-            <div className="rounded-lg bg-white px-3 py-3 text-sm">No media here yet. Upload it in Media, or tick Show all destinations.</div>
+      <div className="flex flex-col gap-1.5">
+        <div className="text-[12px] font-semibold sm:text-[13px]">Picture or video</div>
+        <button type="button" disabled={ad.mode === "reuse"} onClick={() => setPicking(true)} className={`flex items-center gap-3 rounded-xl border-2 border-dashed px-3 py-3 text-left ${ad.mode === "reuse" ? "border-line bg-white" : "border-[#9AA39E] bg-white hover:border-brand"}`}>
+          {thumbUrl ? (
+            chosen && chosenVideo ? <video src={thumbUrl} muted preload="metadata" className="h-16 w-16 flex-none rounded-lg bg-black object-cover" /> : <img src={thumbUrl} alt="" className="h-16 w-16 flex-none rounded-lg border border-line object-cover" />
           ) : (
-            <div className="grid max-h-[300px] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-5">
-              {shown.map((m) => {
-                const on = m.id === ad.media_id;
-                const video = m.format === "MP4" || /\.(mp4|mov)$/i.test(m.file_name);
-                return (
-                  <button key={m.id} type="button" aria-pressed={on} onClick={() => patch({ media_id: m.id, kind: video ? "video" : "image", name: /^Ad \d+$/.test(ad.name) ? `${m.format ?? (video ? "MP4" : "PNG")} ${m.file_name.replace(/\.[a-z0-9]+$/i, "").slice(0, 24)}` : ad.name })} className={`flex flex-col overflow-hidden rounded-lg border-2 bg-white p-0 text-left ${on ? "border-brand" : "border-line"}`}>
-                    {video ? <video src={m.url} muted preload="metadata" className="aspect-square w-full bg-black object-cover" /> : <img src={m.url} alt="" loading="lazy" className="aspect-square w-full object-cover" />}
-                    <span className="truncate px-1.5 py-1 text-[11px]">{on ? "✓ " : ""}{m.file_name}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <div className="flex h-16 w-16 flex-none items-center justify-center rounded-lg bg-ground text-2xl text-muted">+</div>
           )}
-          {chosen && <div className="text-[13px]">Chosen: <B>{chosen.file_name}</B></div>}
-          <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3">
-            <div className="text-[13px] font-semibold">Or use a picture already in Meta</div>
-            {metaImgs === null ? (
-              <Btn small kind="s" className="self-start" disabled={busy !== ""} onClick={() => void loadMeta()}>Show pictures from past ads</Btn>
-            ) : metaImgs.length === 0 ? (
-              <div className="text-[13px] text-muted">No pictures found in the ad account.</div>
+          <div className="min-w-0 text-[13px]">
+            {hasMedia ? (
+              <>
+                <div className="font-bold">{chosen ? chosen.file_name : ad.kind === "video" ? "Video from a past ad" : "Picture from a past ad"}</div>
+                <div className="text-muted">{ad.mode === "reuse" ? "Already in the ad account. Choose \u201cChange the words or picture\u201d to swap it." : "Tap to change"}</div>
+              </>
             ) : (
               <>
-                <div className="grid max-h-[300px] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-6">
-                  {metaImgs.map((m) => (
-                    <button key={m.hash} type="button" onClick={() => patch({ mode: "same", image_hash: m.hash, video_id: undefined, kind: "image", thumb: m.thumb, media_id: undefined, name: /^Ad \d+$/.test(ad.name) ? `PNG ${m.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 24)}` : ad.name })} className="flex flex-col overflow-hidden rounded-lg border-2 border-line bg-white p-0 text-left">
-                      <img src={m.thumb} alt="" loading="lazy" className="aspect-square w-full object-cover" />
-                      <span className="truncate px-1.5 py-1 text-[11px]">{m.name || "picture"}</span>
-                    </button>
-                  ))}
-                </div>
-                {metaNext && <Btn small kind="s" className="self-start" disabled={busy !== ""} onClick={() => void loadMeta(metaNext)}>Show more</Btn>}
+                <div className="font-bold">Tap to choose a picture or video</div>
+                <div className="text-muted">Upload a new one, pick from Media, or reuse one from a past ad.</div>
               </>
             )}
           </div>
-        </Fld>
+        </button>
+      </div>
+      {picking && (
+        <MediaPicker destId={destId} initial={media} onClose={() => setPicking(false)} onPick={(p) => {
+          setPicking(false);
+          if (p.from === "library") patch({ mode: "library", media_id: p.media.id, kind: p.video ? "video" : "image", name: /^Ad \d+$/.test(ad.name) ? `${p.video ? "MP4" : "PNG"} ${p.media.file_name.replace(/\.[a-z0-9]+$/i, "").slice(0, 24)}` : ad.name });
+          else patch({ mode: "same", image_hash: p.image.hash, video_id: undefined, kind: "image", thumb: p.image.thumb, media_id: undefined, name: /^Ad \d+$/.test(ad.name) ? `PNG ${p.image.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 24)}` : ad.name });
+        }} />
       )}
 
       {!edit ? (
