@@ -39,6 +39,8 @@ export default function CampaignBuild() {
   const [run, setRun] = useState<Run>(IDLE);
   const [seats, setSeats] = useState<{ departures: number; seats: number; unknown: number; next: string | null } | null>(null);
   const win = useRpc<Winners>("campaign_winners", { p_days: 30 }, NONE);
+  // The ads list in step 4 looks back over the whole year, with the date each ad last ran.
+  const year = useRpc<Winners & { since?: string }>("ad_winners_since", { p_since: `${new Date().getFullYear()}-01-01` }, NONE);
   const camps = useCampaigns(30);
   const countryCost = useCountryCost(30);
   const destCost = useDestinationCost(30);
@@ -69,6 +71,18 @@ export default function CampaignBuild() {
   const scope: "region" | "country" | "account" | "none" = everything ? "account" : regionSets.length ? "region" : countrySets.length ? "country" : country ? "none" : "account";
   const sets = scope === "region" ? regionSets : scope === "country" ? countrySets : scope === "account" ? win.data.ad_sets : [];
   const forDest = scope === "region" || scope === "country";
+  const yearAds = useMemo(() => {
+    const all = year.data.ads ?? [];
+    if (b.dest) {
+      const own = all.filter((a) => a.destination_id === b.dest);
+      if (own.length) return own;
+    }
+    if (country) {
+      const c = all.filter((a) => (a.country ?? "").toLowerCase() === country.toLowerCase());
+      if (c.length) return c;
+    }
+    return all;
+  }, [year.data, b.dest, country]);
   const ads = useMemo(() => {
     const ids = new Set(sets.map((x) => x.id));
     return scope === "account" ? win.data.ads : win.data.ads.filter((a) => ids.has(a.ad_set_id));
@@ -502,7 +516,7 @@ export default function CampaignBuild() {
 
       {/* ---------- 4. Ads ---------- */}
       <Step n={existing ? 3 : 4} title="Ads: media and words" summary={sum4} open={open === 4} done={b.ads.length > 0 && issues.every((i) => i.step !== 4)} onToggle={() => setOpen(open === 4 ? 0 : 4)}>
-        <AdsForm ads={b.ads} set={(list) => setB((x) => ({ ...x, ads: list }))} winners={ads.length ? ads : win.data.ads} media={media} destId={b.dest} defaults={defaults} creativeOk={creativeOk} onNote={setNote} />
+        <AdsForm ads={b.ads} set={(list) => setB((x) => ({ ...x, ads: list }))} winners={yearAds} since={year.data.since} media={media} destId={b.dest} defaults={defaults} creativeOk={creativeOk} onNote={setNote} />
         <div className="flex flex-col gap-2 rounded-lg border border-line bg-[#F7F8F6] px-3 py-3">
           <div className="text-sm font-bold">Variations by Meta AI</div>
           <p className="m-0 text-[13px] text-muted">Meta makes extra versions of each ad by itself and shows each person the one that works best. No new ads to manage, and nothing is published until a person turns the ad on.</p>

@@ -15,8 +15,10 @@ export const fromSource = (s: SourceAd, w: WinAd | undefined, d: Defaults): AdDr
 });
 
 /** The ads of the new ad set: copy the best ones, or make new ones with your own words or Mira's. */
-export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk, onNote }: {
-  ads: AdDraft[]; set: (ads: AdDraft[]) => void; winners: WinAd[]; media: MediaItem[]; destId: string; defaults: Defaults; creativeOk: boolean; onNote: (text: string) => void;
+const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-MY", { day: "numeric", month: "short" });
+
+export function AdsForm({ ads, set, winners, since, media, destId, defaults, creativeOk, onNote }: {
+  ads: AdDraft[]; set: (ads: AdDraft[]) => void; winners: WinAd[]; since?: string; media: MediaItem[]; destId: string; defaults: Defaults; creativeOk: boolean; onNote: (text: string) => void;
 }) {
   const [loading, setLoading] = useState("");
   const [more, setMore] = useState(false);
@@ -42,7 +44,7 @@ export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-[13px] font-semibold">Add one of the best {paused ? "" : "running "}ads {destId ? "for this destination" : "in the account"} (last 30 days, cheapest leads first)</div>
+          <div className="text-[13px] font-semibold">Add one of the best {paused ? "" : "running "}ads {destId ? "for this destination" : "in the account"} this year, cheapest leads first{since && since > `${new Date().getFullYear()}-01-01` ? <span className="font-normal text-muted"> (figures from {day(since)}; older months are still loading)</span> : ""}</div>
           <label className="flex items-center gap-2 text-[13px]">
             <input type="checkbox" checked={paused} onChange={(e) => setPaused(e.target.checked)} className="h-4 w-4" /> Show paused ads too
           </label>
@@ -53,10 +55,11 @@ export function AdsForm({ ads, set, winners, media, destId, defaults, creativeOk
             <li key={w.id} className="flex items-center gap-2 px-3 py-2">
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 text-sm font-bold">
-                  {w.ad} {w.proven && <Pill tone="g">Proven</Pill>} {w.status !== "ACTIVE" && <Pill tone="n">Paused</Pill>}
+                  {w.ad} {w.proven && <Pill tone="g">Proven</Pill>} {w.status !== "ACTIVE" && <Pill tone="n">Off</Pill>}
                 </span>
                 <span className="block break-words text-[12px] text-muted">
-                  {w.campaign} · <B>{cpl(w.spend, w.leads)}</B> a lead · {w.leads} leads · {rm(w.spend)}
+                  {w.campaign} · <B>{cpl(w.spend, w.leads)}</B> a lead · {w.leads} leads · {rm(w.spend)} ·{" "}
+                  {w.status === "ACTIVE" ? <span className="font-semibold text-[#0B5A43]">running now</span> : <span className="font-semibold text-ink">last ran {w.last_ran ? day(w.last_ran) : "?"}</span>}
                 </span>
               </span>
               <Btn small kind="s" disabled={Boolean(loading)} onClick={() => void addWinner(w)}>

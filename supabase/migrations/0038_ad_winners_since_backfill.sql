@@ -1,0 +1,4 @@
+-- Applied through Supabase:
+-- ad_winners_since(p_since date): best ads since a date, with last_ran / first_ran, used by Run campaign step 4 (whole year).
+-- spend_backfill_step() + pg_cron "spend-backfill" every 4 minutes: loads daily spend back to 1 Jan 2026 in 10-day
+-- chunks through meta-sync (spend only), then unschedules itself.

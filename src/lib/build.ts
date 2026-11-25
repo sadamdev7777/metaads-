@@ -119,7 +119,7 @@ export const blankBuild = (email: string): Build => ({
 });
 
 /* ---------- Winners: what to copy from ---------- */
-export type WinAd = { id: string; ad: string; status: string | null; ad_set_id: string; ad_set: string; campaign_id: string; campaign: string; destination_id: string | null; destination: string | null; country: string | null; spend: number; leads: number; clicks: number; impressions: number; days: number; proven: boolean };
+export type WinAd = { id: string; ad: string; status: string | null; ad_set_id: string; ad_set: string; campaign_id: string; campaign: string; destination_id: string | null; destination: string | null; country: string | null; spend: number; leads: number; clicks: number; impressions: number; days: number; proven: boolean; last_ran?: string | null; first_ran?: string | null };
 export type WinSet = { id: string; ad_set: string; daily_budget: number | null; campaign_id: string; campaign: string; destination_id: string | null; destination: string | null; country: string | null; spend: number; leads: number; clicks: number; impressions: number; ads: number; proven: boolean };
 export type Winners = { ads: WinAd[]; ad_sets: WinSet[] };
 
